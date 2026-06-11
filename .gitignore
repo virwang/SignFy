@@ -9,7 +9,8 @@ code/I3D/archived/
 *.pt
 
 *.zip
-*.mp4
-*start_kit/videos/
+*.mp4/
 *videos/
 *.xlsx
+*Microsoft_Videos/
+*.venv/
