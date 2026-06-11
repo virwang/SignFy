@@ -10,6 +10,7 @@ SignFy aims to facilitate seamless communication by recognizing and interpreting
 
 - **Language**: Python
 - **Focus**: Sign Language Recognition & Communication
+- **LLM Agent**: Ollama (Local LLM Platform)
 
 ## 📚 Data Source
 
@@ -19,6 +20,7 @@ This project utilizes the WLASL (World Level American Sign Language) 2000 datase
 
 ### Prerequisites
 - Python 3.7 or higher
+- Ollama installed ([https://ollama.com/](https://ollama.com/))
 - Required dependencies (see requirements.txt)
 
 ### Installation
@@ -28,6 +30,19 @@ git clone https://github.com/virwang/SignFy.git
 cd SignFy
 pip install -r requirements.txt
 ```
+
+### Setting up Ollama
+
+1. Install Ollama from [https://ollama.com/](https://ollama.com/)
+2. Start the Ollama service:
+   ```bash
+   ollama serve
+   ```
+3. In another terminal, pull a model (e.g., `llama2`):
+   ```bash
+   ollama pull llama2
+   ```
+4. The Ollama API will be available at `http://localhost:11434`
 
 ## 📖 Usage
 
