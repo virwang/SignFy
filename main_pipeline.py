@@ -1,10 +1,10 @@
 import sys
 
 # import modules here
-from english_to_asl_gloss_llama import translate_to_gloss
+from english_to_asl_gloss_llama import ask_llama as translate_to_gloss
 from asl_video_mapping import find_video_records
-from video_clipper import clip_and_merge_videos
-from web_renderer import update_web_ui
+# from video_clipper import clip_and_merge_videos
+# from web_renderer import update_web_ui
 
 def main():
     # 1. receive user input
@@ -17,10 +17,11 @@ def main():
     try:
         # Stage 1: LLM Translation (Input: English string -> Output: ASL Gloss array)
         asl_gloss_list = translate_to_gloss(user_input)
-        print(f"[Stage 1 success] ASL Gloss: {asl_gloss_list}")
+        gloss_array = asl_gloss_list.split(" ")  
+        print(f"[Stage 1 success] ASL Gloss: {gloss_array}")
 
         # Stage 2: Video Mapping (Input: ASL Gloss array -> Output: Video path/ID array)
-        video_records = find_video_records(asl_gloss_list)
+        video_records = find_video_records(gloss_array)
         print(f"[Stage 2 success] Found corresponding videos: {len(video_records)}")
 
         #Stage 3: Video Clipping & Merging (Input: Video records -> Output: Final video file path)

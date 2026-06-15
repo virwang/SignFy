@@ -13,7 +13,7 @@ import urllib.request
 
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/chat")
-DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
+DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1")
 
 SYSTEM_PROMPT = """You are an ASL gloss translator.
 
@@ -218,22 +218,8 @@ def main() -> int:
         return 1
 
     print(gloss)
-    return gloss
+    return 0
 
 
 if __name__ == "__main__":
-    # args = parse_args()
-    # text = " ".join(args.text).strip()
-    
-    # if not text:
-    #     try:
-    #         text = input("Please enter English text to translate to ASL gloss: ").strip()
-    #     except EOFError:
-    #         print("Action was cancelled.", file=sys.stderr)
-    #         sys.exit(2)
-    
-    # if not text:
-    #     print("No input provided. Exiting.", file=sys.stderr)
-    #     sys.exit(2)
-                
     raise SystemExit(main())
