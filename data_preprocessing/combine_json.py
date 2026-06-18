@@ -1,10 +1,17 @@
 import json
 
+"""
+This script is used to combine two json files. microsoft.json (originated from the csv files under Microsoft_CSV folder)
+and exits_v2.json (originated from the wlasl_v3.json file after some removal of the missing videos). 
+The goal is to create a new json file asl_words.json that contains all the entries from both files, while ensuring that we keep all video_id entries for each gloss. 
+This is important because some glosses may have multiple video_id entries, and we want to preserve all of them for training and evaluation purposes. 
+"""
+
 # Load both files
-with open('exists_v2.json', 'r', encoding='utf-8') as f:
+with open('data_preprocessing\\exists_v2.json', 'r', encoding='utf-8') as f:
     exists_v2 = json.load(f)
 
-with open('microsoft.json', 'r', encoding='utf-8') as f:
+with open('data_preprocessing\\microsoft.json', 'r', encoding='utf-8') as f:
     microsoft = json.load(f)
 
 # Dictionary to combine entries by lowercase gloss
