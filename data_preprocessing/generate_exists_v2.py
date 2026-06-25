@@ -36,15 +36,15 @@ for entry in data:
             removed_instances += 1
             continue
         filtered.append({
-            'source': "WLASL_"+inst.get('source'),
+            'source': inst.get('source'),
             'video_id': inst.get('video_id')
         })
         kept_instances += 1
 
     if filtered:
         new_content.append({
-            'gloss': gloss,
-            'instances': filtered
+            'gloss': gloss.upper(),
+            'item': filtered
         })
 
 with OUTPUT.open('w', encoding='utf-8') as f:

@@ -5,21 +5,69 @@ import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
 
-# --- Paths Configuration ---
-JSON_INPUT_PATH = "asl_words.json"
-MS_VIDEO_DIR = "Microsoft_Videos"
-OTHER_VIDEO_DIR = "videos"
+'''
+This module is used for checking if the video_ids exist under the Microsoft_Videos and videos folder.
+By reading the microsoft.json file and exists_v2.json file, we will check if the video_id exists under the corresponding folders, and add a status field to indicate whether the video was found or missing.
+Then we will save the result as asl_mis_wlasl.json, which contains all the records with their status. 
+We will also generate an Excel file asl_mis_wlasl.xlsx to summarize the statistics of the found and missing videos, and highlight the glosses based on certain conditions 
+(e.g., if the gloss contains digits or number words, or if it's a single letter).
+'''
 
-JSON_FOUND_PATH = "asl_mis_wlasl.json"
-JSON_MISSING_PATH = "missing_v2.json"
-EXCEL_OUTPUT_PATH = "asl_mis_wlasl.xlsx"
+
+# merge microsoft.json and exists_v2.json into a single list of records
+# if a gloss exists in both files, merge the items
+# if a gloss exists in only one file, add it to the merged list
+def merge_jsons(mis_path, wlasl_path):
+    print(f"Merging {mis_path} and {wlasl_path}...")
+    '''
+    Merge the mis_data and wlasl_data into a single list of records.
+    '''
+    # 1. Load input JSON file
+    with open(mis_path, "r", encoding="utf-8") as f:
+        mis_data = json.load(f)
+    with open(wlasl_path, "r", encoding="utf-8") as f:
+        wlasl_data = json.load(f)
+
+    merged_by_gloss = {}
+
+    def format_item(item):
+        return {
+            'video_id': item.get('video_id', ''),
+            'source': item.get('source', '')
+        }
+
+    # Process Microsoft data
+    for mis in mis_data:
+        gloss_upper = mis.get('gloss', '').upper()
+        formatted_items = [format_item(i) for i in mis.get('item', [])]
+        
+        if gloss_upper in merged_by_gloss:
+            merged_by_gloss[gloss_upper]['item'].extend(formatted_items)
+        else:
+            merged_by_gloss[gloss_upper] = {
+                'gloss': gloss_upper,
+                'item': formatted_items
+            }
+
+    # Process WLASL data
+    for wlasl in wlasl_data:
+        gloss_upper = wlasl.get('gloss', '').upper()
+        formatted_items = [format_item(i) for i in wlasl.get('item', [])]
+        
+        if gloss_upper in merged_by_gloss:
+            merged_by_gloss[gloss_upper]['item'].extend(formatted_items)
+        else:
+            merged_by_gloss[gloss_upper] = {
+                'gloss': gloss_upper,
+                'item': formatted_items
+            }
+
+    return list(merged_by_gloss.values())
 
 
-def build_video_cache(directory, is_microsoft=False):
-    """Reads all filenames under the target folder.
-
-    If it's Microsoft, it extracts only the leading digits from filenames like
-    '12345-gloss.mp4'.
+def build_video_cache(directory):
+    """
+    Reads all filenames under the target folder.
     """
     if not os.path.exists(directory):
         return set()
@@ -27,58 +75,57 @@ def build_video_cache(directory, is_microsoft=False):
     cache = set()
     for f in os.listdir(directory):
         base_name = os.path.splitext(f)[0]  # remove .mp4 extension
-        if is_microsoft:
-
-            # using re.match to find the leading digits in the filename
-            match = re.match(r"^(\d+)", base_name)
-            if match:
-                cache.add(match.group(1))  # only add the leading digits to the cache
-        else:
-            cache.add(base_name)  # other databases keep the original names
+        cache.add(base_name)
 
     return cache
 
 
 def main():
-    # 1. Load input JSON file
-    with open(JSON_INPUT_PATH, "r", encoding="utf-8") as f:
-        data = json.load(f)
 
     # Performance Optimization: Cache video filenames in memory
     print("Building video file cache...")
-    ms_video_cache = build_video_cache(MS_VIDEO_DIR, is_microsoft=True)
-    other_video_cache = build_video_cache(OTHER_VIDEO_DIR, is_microsoft=False)
+    ms_video_cache = build_video_cache(MS_VIDEO_DIR)
+    other_video_cache = build_video_cache(OTHER_VIDEO_DIR)
     print("Cache built successfully. Starting data comparison...")
 
     combined_records = []  # merge found and missing records into one list with status field
 
+    print("Merging JSON files...")
+    merged_data = merge_jsons(MIS_JSON_PATH, WLASL_JSON_PATH)
+
     # 2. Loop through data and check if the video exists
-    for item in data:
-        gloss = item.get("gloss")
-        video_id = str(item.get("video_id"))  # Ensure string type
-        source = item.get("source")
+    for entry in merged_data:
+        gloss = entry.get("gloss", "")
+        items = entry.get("item", [])
+        combined_records.append({
+            'gloss': gloss,
+            "status":"",
+            'item': []
+        })
 
-        # Determine which memory cache to use based on the source
-        if str(source).lower() == "microsoft":
-            is_found = video_id in ms_video_cache
-        else:
-            is_found = video_id in other_video_cache
-
-        # add status field to indicate whether the video was found or missing
-        status_str = "Found" if is_found else "Missing"
-        
-        record = {
-            "gloss": gloss, 
-            "video_id": video_id, 
-            "source": source,
-            "status": status_str  
-        }
-        
-        combined_records.append(record)
+        for item in items:
+            video_id = item.get("video_id", "")
+            source = item.get("source", "")
+            
+            if source == 'microsoft':
+                is_found = os.path.splitext(video_id)[0] in ms_video_cache
+            else:
+                is_found=video_id in other_video_cache
+            
+            # Add status to the merged item
+            item["status"] = "Found" if is_found else "Missing"
+            
+            # Flatten to combined_records for Excel generation
+            combined_records.append({
+                'gloss': gloss,
+                'video_id': video_id,
+                'source': source,
+                'status': item["status"]
+            })
 
     # save the combined records to a new JSON file for reference
     with open(JSON_FOUND_PATH, "w", encoding="utf-8") as f:
-        json.dump(combined_records, f, indent=4, ensure_ascii=False)
+        json.dump(merged_data, f, indent=4, ensure_ascii=False)
 
     print(f"JSON processing completed. Total combined records: {len(combined_records)}")
 
@@ -180,4 +227,17 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    
+    # --- Paths Configuration ---
+    MIS_JSON_PATH = "..\\data_preprocessing\\microsoft.json"
+    WLASL_JSON_PATH = "..\\data_preprocessing\\exists_v2.json"
+
+    MS_VIDEO_DIR = "Microsoft_Videos"
+    OTHER_VIDEO_DIR = "videos"
+
+    JSON_FOUND_PATH = "..\\data_preprocessing\\asl_mis_wlasl.json"
+    EXCEL_OUTPUT_PATH = "..\\data_preprocessing\\asl_mis_wlasl.xlsx"
+    # main()
+    merged_json= merge_jsons(MIS_JSON_PATH, WLASL_JSON_PATH)
+
+    print(json.dumps(merged_json, indent=4, ensure_ascii=False))

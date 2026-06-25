@@ -3,8 +3,8 @@ import json
 import pandas as pd
 
 """
-This script is used to combine three csv files (training, validation, and test sets) from the Microsoft_CSV folder into a single json file named microsoft.json.
-1. read the three csv files and concatenate them into a single dataframe.
+This script is used to convert the csv files in the Microsoft_CSV folder into a single json file named microsoft.json.
+1. read the csv file and concatenate them into a single dataframe.
 2. transform the combined dataframe into the specified json structure, which includes extracting the lemma from the
 video_id field and adding a source field with the value "microsoft".
 3. write the resulting json data to disk with proper error handling and logging.
@@ -20,13 +20,10 @@ def read_csv_file(filename):
         print(f"Error reading {filename}: {e}")
         return pd.DataFrame()
 
-def combine_datasets(train_path, val_path, test_path):
-    """Combines training, validation, and test dataframes."""
+def convert_json(train_path):
+    """Convert the existing file to json format."""
     train_df = read_csv_file(train_path)
-    val_df = read_csv_file(val_path)
-    test_df = read_csv_file(test_path)
-    
-    combined_df = pd.concat([train_df, val_df, test_df], ignore_index=True)
+    combined_df = pd.concat([train_df], ignore_index=True)
     return combined_df
 
 def extract_lemma_from_video_id(video_id_str):
@@ -54,31 +51,34 @@ def extract_lemma_from_video_id(video_id_str):
 
 def transform_to_json_structure(df):
     """Maps the combined dataframe into the specified schema format."""
-    json_list = []
+    gloss_map = {}
     for _, row in df.iterrows():
         # Ensure values are strings and handle potential NaN values safely
         gloss_val = str(row['gloss']).strip() if pd.notna(row['gloss']) else ""
         video_id_val = str(row['video_id']).strip() if pd.notna(row['video_id']) else ""
+    
         
-        extracted_lemma = extract_lemma_from_video_id(video_id_val)
-        
-        json_list.append({
-            "gloss": gloss_val,
-            "lemma": extracted_lemma,
+        item_detail = {
             "video_id": video_id_val,
             "source": "microsoft"
-        })
-    return json_list
+        }
+        
+        if gloss_val not in gloss_map:
+            gloss_map[gloss_val] = {
+                "gloss": gloss_val,
+                "item": []
+            }
+        gloss_map[gloss_val]["item"].append(item_detail)
+        
+    return list(gloss_map.values())
 
 def main():
     train_file = "Microsoft_CSV\\aslcitizen_training_set.csv"
-    val_file = "Microsoft_CSV\\aslcitizen_val_set.csv"
-    test_file = "Microsoft_CSV\\aslcitizen_test_set.csv"
     output_filename = "data_preprocessing\\microsoft.json"
 
     print("--- Starting Data Aggregation Process ---")
     
-    combined_df = combine_datasets(train_file, val_file, test_file)
+    combined_df = convert_json(train_file)
     
     if combined_df.empty:
         print("Error: No data was loaded. Aborting JSON generation.")
