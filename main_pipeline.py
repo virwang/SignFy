@@ -21,7 +21,7 @@ def main():
         print(f"[Stage 1 success] ASL Gloss: {gloss_array}")
 
         # Stage 2: Video Mapping (Input: ASL Gloss array -> Output: Video path/ID array)
-        video_records = find_video_records(gloss_array)
+        video_records = find_video_records(gloss_array, english_input=user_input)
         print(f"[Stage 2 success] Found corresponding videos: {video_records}")
 
         #Stage 3: Video Clipping & Merging (Input: Video records -> Output: Final video file path)
