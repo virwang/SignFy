@@ -4,6 +4,7 @@ import sys
 from english_to_asl_gloss_llama import ask_llama as translate_to_gloss
 from asl_llm_video_mapping import find_video_records
 from video_clipper import clip_and_merge_videos
+from media_pipline_v1 import convert_video_to_json
 # from web_renderer import update_web_ui
 
 def main():
@@ -27,6 +28,13 @@ def main():
         #Stage 3: Video Clipping & Merging (Input: Video records -> Output: Final video file path)
         final_video_path = clip_and_merge_videos(video_records)
         print(f"[Stage 3 success] Video merging complete, path: {final_video_path}")
+
+        # Stage 3.5: Keypoint Extraction (Input: Final video file path -> Output: .json file path)
+        if final_video_path:
+            json_path = convert_video_to_json(final_video_path)
+            print(f"[Stage 3.5 success] Keypoint extraction complete, path: {json_path}")
+        else:
+            print("[Stage 3.5 skipped] No merged video generated.")
 
         # Stage 4: Web Rendering (Input: Final video file path -> Output: Updated web UI)
         # update_web_ui(final_video_path)

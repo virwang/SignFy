@@ -9,8 +9,9 @@ code/I3D/archived/
 *.pt
 
 *.zip
-*.mp4/
+*.mp4
 *videos/
 *.xlsx
 *Microsoft_Videos/
 *.venv/
+*.__pycache__
