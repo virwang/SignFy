@@ -97,11 +97,6 @@ def main():
     for entry in merged_data:
         gloss = entry.get("gloss", "")
         items = entry.get("item", [])
-        combined_records.append({
-            'gloss': gloss,
-            "status":"",
-            'item': []
-        })
 
         for item in items:
             video_id = item.get("video_id", "")
@@ -227,17 +222,18 @@ def main():
 
 
 if __name__ == "__main__":
+    # Get the directory of the current script to resolve paths dynamically
+    SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+    ROOT_DIR = os.path.dirname(SCRIPT_DIR)
     
     # --- Paths Configuration ---
-    MIS_JSON_PATH = "..\\data_preprocessing\\microsoft.json"
-    WLASL_JSON_PATH = "..\\data_preprocessing\\exists_v2.json"
+    MIS_JSON_PATH = os.path.join(SCRIPT_DIR, "microsoft.json")
+    WLASL_JSON_PATH = os.path.join(SCRIPT_DIR, "exists_v2.json")
 
-    MS_VIDEO_DIR = "Microsoft_Videos"
-    OTHER_VIDEO_DIR = "videos"
+    MS_VIDEO_DIR = os.path.join(ROOT_DIR, "Microsoft_Videos")
+    OTHER_VIDEO_DIR = os.path.join(ROOT_DIR, "videos")
 
-    JSON_FOUND_PATH = "..\\data_preprocessing\\asl_mis_wlasl.json"
-    EXCEL_OUTPUT_PATH = "..\\data_preprocessing\\asl_mis_wlasl.xlsx"
-    # main()
-    merged_json= merge_jsons(MIS_JSON_PATH, WLASL_JSON_PATH)
-
-    print(json.dumps(merged_json, indent=4, ensure_ascii=False))
+    JSON_FOUND_PATH = os.path.join(SCRIPT_DIR, "asl_mis_wlasl.json")
+    EXCEL_OUTPUT_PATH = os.path.join(SCRIPT_DIR, "asl_mis_wlasl.xlsx")
+    
+    main()

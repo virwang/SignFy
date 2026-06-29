@@ -34,64 +34,50 @@ def load_video_filenames(file_path=MAPPLING_PATH):
         return data
 
 def find_matching_glosses(json_data, llm_output):
-    matching_glosses = {}
-    for gloss in llm_output:
-        print(f"Checking gloss: {gloss}")
-        
-        for data in json_data:  
-            data_gloss = data.get('gloss', '').upper()  # Ensure gloss is uppercase for comparison  
-            if data_gloss == gloss.upper() and data.get('status') == 'Found':                           
-                video_path = data.get('source', 'N/A')                
-                if video_path == 'microsoft':
-                    video_path = "./Microsoft_Videos/"
-                else:
-                    video_path = "./videos/"
-                print(f"Match found for gloss '{gloss}': video_id={data.get('video_id', 'N/A')}, video_path={video_path}")        
-                matching_glosses[gloss] = {
-                    "video_id": data.get('video_id', 'N/A'),
-                    "video_path": video_path
-                }
-                
-                print(f"Found match for gloss '{gloss}': {matching_glosses[gloss]}")
-                break
-    
-    return matching_glosses
-
-def find_matching_glosses(json_data, llm_output):
-
-    gloss_index = {
-        str(item.get('gloss', '')).upper(): item
-        for item in json_data
-        if item.get('status') == 'Found'
-    }
+    # build a mapping from gloss name (uppercase) to a list of its video items
+    gloss_index = {}
+    for entry in json_data:
+        gloss = str(entry.get('gloss', '')).upper()
+        items = entry.get('item', [])
+        # We only want to keep items that are "Found"
+        found_items = [i for i in items if i.get('status') == 'Found']
+        if found_items:
+            gloss_index[gloss] = found_items
 
     matching_glosses = {}
-
     for gloss in llm_output:
-
         if not gloss:
             continue
 
-        item = gloss_index.get(gloss.upper())
+        gloss_upper = gloss.upper()
+        if gloss_upper in gloss_index:
+            # pick the first found item/video
+            first_found_item = gloss_index[gloss_upper][0]
+            source = first_found_item.get('source', '').lower()
+            video_id = first_found_item.get('video_id', 'N/A')
 
-        if item:
-
-            source = item.get('source', '').lower()
-
-            if source == 'Microsoft_Videos':
+            if source == 'microsoft':
                 video_path = "./Microsoft_Videos/"
             else:
                 video_path = "./videos/"
 
             matching_glosses[gloss] = {
-                "video_id": item.get('video_id', 'N/A'),
+                "video_id": video_id,
                 "video_path": video_path
             }
 
     return matching_glosses
 
 def record_not_found_glosses(json_data, llm_output):
-    not_found_glosses = [g for g in llm_output if not any(gloss['gloss'] == g.upper() for gloss in json_data) or (gloss := next((g for g in json_data if g['gloss'].upper() == g.upper()), None)) and gloss['status'] != 'Found']
+    # build a set of found glosses
+    found_glosses = set()
+    for entry in json_data:
+        gloss = str(entry.get('gloss', '')).upper()
+        items = entry.get('item', [])
+        if any(i.get('status') == 'Found' for i in items):
+            found_glosses.add(gloss)
+            
+    not_found_glosses = [g for g in llm_output if g and g.upper() not in found_glosses]
     return not_found_glosses
 
 def find_video_records(llm_output):
