@@ -485,7 +485,8 @@ def find_video_records(llm_output, english_input=None, output_excel_path="asl_ma
 
     return {
         "matching_glosses": matching_glosses,
-        "json_output": json_output_data
+        "json_output": json_output_data,
+        "output_json_path": output_json_path
     }
 
 def main():
@@ -534,4 +535,4 @@ def main():
         print(f"  {gloss} => ID: {details['video_id']}, Path: {details['video_path']}")
 
 if __name__ == "__main__":
-    main()
+    main()

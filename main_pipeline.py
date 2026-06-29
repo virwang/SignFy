@@ -3,7 +3,7 @@ import sys
 # import modules here
 from english_to_asl_gloss_llama import ask_llama as translate_to_gloss
 from asl_llm_video_mapping import find_video_records
-# from video_clipper import clip_and_merge_videos
+from video_clipper import clip_and_merge_videos
 # from web_renderer import update_web_ui
 
 def main():
@@ -25,8 +25,8 @@ def main():
         print(f"[Stage 2 success] Found corresponding videos: {video_records}")
 
         #Stage 3: Video Clipping & Merging (Input: Video records -> Output: Final video file path)
-        # final_video_path = clip_and_merge_videos(video_records)
-        # print(f"[Stage 3 success] Video merging complete, path: {final_video_path}")
+        final_video_path = clip_and_merge_videos(video_records)
+        print(f"[Stage 3 success] Video merging complete, path: {final_video_path}")
 
         # Stage 4: Web Rendering (Input: Final video file path -> Output: Updated web UI)
         # update_web_ui(final_video_path)
