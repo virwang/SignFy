@@ -74,10 +74,58 @@ def load_video_filenames(file_path=None):
         data = json.load(f)
         return data
 
+_valid_gloss_cache = None
+
+def get_valid_glosses() -> set:
+    """
+    Returns a cached set of all uppercase gloss names from asl_mis_wlasl.json.
+    """
+    global _valid_gloss_cache
+    if _valid_gloss_cache is None:
+        try:
+            data = load_video_filenames()
+            _valid_gloss_cache = {
+                entry.get("gloss", "").upper()
+                for entry in data
+                if isinstance(entry, dict) and entry.get("gloss")
+            }
+        except Exception as e:
+            print(f"[Warning] Failed to load valid gloss cache: {e}", file=sys.stderr)
+            _valid_gloss_cache = set()
+    return _valid_gloss_cache
+
+def is_gloss_in_db(gloss: str) -> bool:
+    """
+    Checks if the gloss is present in the asl_mis_wlasl.json mapping file.
+    """
+    if not gloss:
+        return False
+    return gloss.strip().upper() in get_valid_glosses()
+
+def _normalize_llm_output(llm_output) -> list:
+    """
+    Normalizes llm_output to a list of (primary_gloss, fallback_gloss) tuples.
+    Supports both list of strings and list of dicts.
+    """
+    pairs = []
+    for item in llm_output:
+        if not item:
+            continue
+        if isinstance(item, dict):
+            primary = str(item.get("gloss", "")).strip().upper()
+            fallback = str(item.get("fallback", "")).strip().upper()
+            if primary:
+                pairs.append((primary, fallback or primary))
+        else:
+            token = str(item).strip().upper()
+            if token:
+                pairs.append((token, token))
+    return pairs
+
 def find_matching_glosses(json_data, llm_output):
     """
     Find matching glosses and return a dictionary mapping each gloss to its first found video path & ID.
-    This maintains original signature and behavior.
+    Supports fallback synonyms if primary is missing.
     """
     ms_cache, other_cache = get_video_caches()
     
@@ -116,13 +164,18 @@ def find_matching_glosses(json_data, llm_output):
             gloss_index[gloss] = found_items
 
     matching_glosses = {}
-    for gloss in llm_output:
-        if not gloss:
-            continue
-
-        gloss_upper = gloss.upper()
-        if gloss_upper in gloss_index:
-            first_found_item = gloss_index[gloss_upper][0]
+    normalized_pairs = _normalize_llm_output(llm_output)
+    
+    for primary, fallback in normalized_pairs:
+        # Determine which gloss to use (primary, or fallback if primary is missing/not found)
+        chosen_gloss = None
+        if primary in gloss_index:
+            chosen_gloss = primary
+        elif fallback in gloss_index:
+            chosen_gloss = fallback
+            
+        if chosen_gloss:
+            first_found_item = gloss_index[chosen_gloss][0]
             source = first_found_item.get('source', '').lower()
             video_id = first_found_item.get('video_id', 'N/A')
 
@@ -131,7 +184,8 @@ def find_matching_glosses(json_data, llm_output):
             else:
                 video_path = "./videos/"
 
-            matching_glosses[gloss] = {
+            # Maintain original primary gloss as key in output mapping for Stage 3 pipeline integration
+            matching_glosses[primary] = {
                 "video_id": video_id,
                 "video_path": video_path
             }
@@ -140,7 +194,7 @@ def find_matching_glosses(json_data, llm_output):
 
 def record_not_found_glosses(json_data, llm_output):
     """
-    Retrieve glosses in llm_output that have no found videos.
+    Retrieve primary glosses in llm_output that have no found videos (neither primary nor fallback found).
     """
     ms_cache, other_cache = get_video_caches()
     found_glosses = set()
@@ -174,7 +228,13 @@ def record_not_found_glosses(json_data, llm_output):
                 found_glosses.add(gloss)
                 break
                 
-    not_found_glosses = [g for g in llm_output if g and g.upper() not in found_glosses]
+    normalized_pairs = _normalize_llm_output(llm_output)
+    not_found_glosses = []
+    for primary, fallback in normalized_pairs:
+        # If neither primary nor fallback has any found video, it's not found
+        if primary not in found_glosses and fallback not in found_glosses:
+            not_found_glosses.append(primary)
+            
     return not_found_glosses
 
 def find_video_records(llm_output, english_input=None, output_excel_path="asl_mapping_report.xlsx", output_json_path="gloss_video_mapping_output/asl_mapping_report.json"):
@@ -182,10 +242,12 @@ def find_video_records(llm_output, english_input=None, output_excel_path="asl_ma
     Performs video matching, caches video filenames in memory, handles missing fields in input JSON gracefully,
     and generates a styled Excel report as well as a JSON report for logging and issue tracking.
     """
+    normalized_pairs = _normalize_llm_output(llm_output)
+
     if output_json_path:
         base_name = os.path.splitext(os.path.basename(output_json_path))[0]
         
-        clean_glosses = [g.upper().strip() for g in llm_output if g and g.strip()]
+        clean_glosses = [g for g, _ in normalized_pairs]
         gloss_part = "_".join(clean_glosses) if clean_glosses else "mapping"
         if len(gloss_part) > 100:
             gloss_part = gloss_part[:100]
@@ -247,16 +309,42 @@ def find_video_records(llm_output, english_input=None, output_excel_path="asl_ma
     unique_glosses_found_count = 0
     unique_glosses_missing_count = 0
 
-    for gloss in llm_output:
-        if not gloss:
-            continue
-
-        gloss_upper = gloss.upper()
+    for primary, fallback in normalized_pairs:
+        gloss_upper = primary
+        fallback_upper = fallback
+        
+        # Check if primary exists and has found videos
+        primary_has_found = False
+        if gloss_upper in gloss_index:
+            primary_has_found = any(i.get('status') == 'Found' for i in gloss_index[gloss_upper])
+            
+        # Determine which gloss/items to map to
+        chosen_gloss = gloss_upper
+        is_fallback_used = False
+        
+        if primary_has_found:
+            items = gloss_index[gloss_upper]
+            chosen_gloss = gloss_upper
+        elif fallback_upper in gloss_index and any(i.get('status') == 'Found' for i in gloss_index[fallback_upper]):
+            items = gloss_index[fallback_upper]
+            chosen_gloss = fallback_upper
+            is_fallback_used = True
+        elif gloss_upper in gloss_index:
+            items = gloss_index[gloss_upper]
+            chosen_gloss = gloss_upper
+        elif fallback_upper in gloss_index:
+            items = gloss_index[fallback_upper]
+            chosen_gloss = fallback_upper
+            is_fallback_used = True
+        else:
+            items = None
+            chosen_gloss = gloss_upper
+            
         gloss_found_any_video = False
         items_list = []
+        display_gloss = primary if chosen_gloss == primary else f"{primary} ({fallback})"
         
-        if gloss_upper in gloss_index:
-            items = gloss_index[gloss_upper]
+        if items is not None:
             for item in items:
                 video_id = item.get('video_id', 'N/A')
                 source = item.get('source', 'unknown').lower()
@@ -281,7 +369,7 @@ def find_video_records(llm_output, english_input=None, output_excel_path="asl_ma
                         full_path = os.path.abspath(os.path.join(OTHER_VIDEO_DIR, actual_filename))
                         
                     found_videos_list.append({
-                        "Gloss": gloss,
+                        "Gloss": display_gloss,
                         "Video ID": video_id,
                         "Source": source,
                         "Directory": dir_path,
@@ -295,7 +383,7 @@ def find_video_records(llm_output, english_input=None, output_excel_path="asl_ma
                         exp_dir = "./videos/"
                         
                     missing_videos_list.append({
-                        "Gloss": gloss,
+                        "Gloss": display_gloss,
                         "Video ID": video_id,
                         "Source": source,
                         "Expected Directory": exp_dir
@@ -319,14 +407,14 @@ def find_video_records(llm_output, english_input=None, output_excel_path="asl_ma
                 else:
                     video_path = "./videos/"
 
-                matching_glosses[gloss] = {
+                matching_glosses[primary] = {
                     "video_id": video_id,
                     "video_path": video_path
                 }
         else:
             # Gloss not in database at all
             missing_videos_list.append({
-                "Gloss": gloss,
+                "Gloss": display_gloss,
                 "Video ID": "N/A (Gloss not in DB)",
                 "Source": "N/A",
                 "Expected Directory": "N/A"
@@ -339,7 +427,10 @@ def find_video_records(llm_output, english_input=None, output_excel_path="asl_ma
 
         # Populate JSON structure: {'gloss':'', 'status':'found'/'missing', 'item':[{'video_id':'','source':''}]}
         json_output_data.append({
-            "gloss": gloss,
+            "gloss": primary,
+            "fallback": fallback,
+            "chosen_gloss": chosen_gloss,
+            "fallback_used": is_fallback_used,
             "status": "found" if gloss_found_any_video else "missing",
             "item": items_list
         })
@@ -383,8 +474,8 @@ def find_video_records(llm_output, english_input=None, output_excel_path="asl_ma
         ],
         "Value": [
             english_input if english_input else "N/A",
-            " ".join(llm_output),
-            len(set(g for g in llm_output if g)),
+            " ".join(g for g, _ in normalized_pairs),
+            len(set(g for g, _ in normalized_pairs)),
             unique_glosses_found_count,
             unique_glosses_missing_count,
             len(found_videos_list) + len([v for v in missing_videos_list if v["Video ID"] != "N/A (Gloss not in DB)"]),

@@ -1,4 +1,4 @@
-﻿"""Translate English text into ASL gloss using a local Llama model via Ollama.
+"""Translate English text into ASL gloss using a local Llama model via Ollama.
 """
 
 from __future__ import annotations
@@ -15,79 +15,16 @@ import urllib.request
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/chat")
 DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1")
 
-SYSTEM_PROMPT = """You are an ASL gloss translator.
-
-Translate English sentences into ASL gloss only.
-
-OUTPUT RULES
-- Output exactly one line containing only the ASL gloss.
-- Do not include explanations, notes, labels, markdown, alternatives, or commentary.
-- Use UPPERCASE gloss tokens only.
-- Separate gloss tokens with single spaces only.
-- Do not use brackets, parentheses, slashes, underscores, or special annotation symbols.
-- Keep gloss concise and natural.
-
-GRAMMAR RULES
-- Prefer ASL word order rather than English word order.
-- Use TOPIC COMMENT structure when natural.
-- Move time expressions to the beginning of the sentence.
-- After a time marker is established, do not add English tense markers.
-- Remove English articles when unnecessary, such as A, AN, THE.
-- Remove English linking and helper verbs when not typically signed, such as AM, IS, ARE, BE, BEEN, BEING, DO, DOES, DID, and TO.
-- Use natural ASL negation with NOT, NONE, NEVER, CAN'T, DON'T, or WON'T as appropriate.
-- Use natural ASL question forms using WHO, WHAT, WHEN, WHERE, WHY, HOW, WHICH, or QUESTION when needed.
-- Translate meaning rather than preserving English grammar.
-
-PRONOUN RULES
-- Use only these pronouns: I, ME, YOU, HE, SHE, WE, THEY, IT, THERE.
-- Never use IX notation or indexing notation.
-
-SUBJECT PLACEMENT
-- After establishing a topic, place the subject pronoun before the predicate when natural.
-- Prefer "HOMEWORK I HAVE" over "HOMEWORK HAVE I".
-- Prefer "STORE I GO" over "STORE GO I".
-- Avoid placing pronouns at the end of clauses unless required for emphasis.
-
-VOCABULARY NORMALIZATION
-- PARENTS -> MOTHER FATHER
-- PARENT -> MOTHER FATHER
-- GRANDPARENTS -> GRANDMOTHER GRANDFATHER
-- GRANDPARENT -> GRANDMOTHER GRANDFATHER
-- CHILDREN -> CHILD
-- KIDS -> CHILD
-- CAN NOT -> CAN'T
-- WILL NOT -> WON'T
-- DO NOT -> DON'T
-
-PROPER NAMES AND FINGERSPELLING
-- Fingerspell names, brands, usernames, codes, acronyms, and words that do not have a common established ASL sign.
-- Represent fingerspelling with hyphens between letters.
-- Example: JOHN -> J-O-H-N
-- Example: NASA -> N-A-S-A
-- Example: CHATGPT -> C-H-A-T-G-P-T
-
-SEMANTIC RULES
-- Translate meaning, not individual English words.
-- Translate idioms by meaning rather than literally.
-- Choose the most common ASL concept for the intended meaning.
-- When an English word has multiple meanings, use surrounding context to select the appropriate gloss.
-
-EXAMPLES
-English: I am going to the store tomorrow.
-ASL: TOMORROW STORE I GO
-
-English: Where do you live?
-ASL: YOU LIVE WHERE
-
-English: My parents are here.
-ASL: MOTHER FATHER HERE
-
-English: John is my friend.
-ASL: J-O-H-N MY FRIEND
-
-English: I don't understand.
-ASL: I UNDERSTAND NOT
-"""
+def load_system_prompt() -> str:
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    prompt_path = os.path.join(script_dir, "english_asl_gloss_llama_prompt.txt")
+    try:
+        with open(prompt_path, "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except Exception as exc:
+        raise RuntimeError(
+            f"Could not load system prompt from '{prompt_path}': {exc}"
+        ) from exc
 
 
 VIDEO_TOKEN_REPLACEMENTS = {
@@ -103,6 +40,7 @@ VIDEO_TOKEN_REPLACEMENTS = {
     "IX-me": "I",
     "IX-ME": "I",
     "IX-i": "I",
+    "IX-i": "I",
     "IX-I": "I",
     "IX-you": "YOU",
     "IX-YOU": "YOU",
@@ -117,45 +55,89 @@ VIDEO_TOKEN_REPLACEMENTS = {
 }
 
 
-def clean_gloss(response: str) -> str:
-    for marker in ("\n\n", "\nNote:", "\n(note:", "\nExplanation:", "\n("):
-        response = response.split(marker, 1)[0]
+def clean_gloss(response: str) -> list:
+    response = response.strip()
+    
+    # Strip markdown code blocks if present
+    if response.startswith("```"):
+        if "\n" in response:
+            first_line, rest = response.split("\n", 1)
+            if first_line.strip().startswith("```"):
+                response = rest
+        if response.endswith("```"):
+            response = response[:-3].strip()
+            
+    # Try to find a JSON array in the response
+    match = re.search(r"\[\s*\{.*\}\s*\]", response, re.DOTALL)
+    if match:
+        response = match.group(0)
+        
+    try:
+        data = json.loads(response)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Failed to parse JSON response from Ollama: {response}") from exc
+        
+    if not isinstance(data, list):
+        raise RuntimeError(f"Expected a JSON array, got: {type(data)}")
+        
+    try:
+        from asl_llm_video_mapping import is_gloss_in_db
+    except ImportError:
+        def is_gloss_in_db(g):
+            return False
 
-    first_line = response.strip().splitlines()[0].strip()
-    prefixes = ("ASL GLOSS:", "GLOSS:", "TRANSLATION:")
+    IGNORE_VERBS = {"AM", "IS", "ARE", "BE", "BEEN", "BEING", "TO"}
+    normalized_data = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        gloss = str(item.get("gloss", "")).strip().upper()
+        fallback = str(item.get("fallback", "")).strip().upper()
+        
+        # Apply normalization replacements
+        # If the user input gloss can be found in the asl_mis_wlasl.json, then use the user input one
+        if is_gloss_in_db(gloss):
+            fallback = gloss
+        else:
+            for old_token, new_token in VIDEO_TOKEN_REPLACEMENTS.items():
+                if gloss == old_token:
+                    gloss = new_token
+                    break
+            
+            if is_gloss_in_db(gloss):
+                fallback = gloss
+            else:
+                for old_token, new_token in VIDEO_TOKEN_REPLACEMENTS.items():
+                    if fallback == old_token:
+                        fallback = new_token
+                        break
+                
+        # Split tokens just in case multiple words were grouped, filtering out helper verbs
+        gloss_parts = [g for g in gloss.split() if g and g not in IGNORE_VERBS]
+        fallback_parts = [f for f in fallback.split() if f and f not in IGNORE_VERBS]
+        
+        max_len = max(len(gloss_parts), len(fallback_parts))
+        for i in range(max_len):
+            g_part = gloss_parts[i] if i < len(gloss_parts) else (gloss_parts[-1] if gloss_parts else "")
+            f_part = fallback_parts[i] if i < len(fallback_parts) else (fallback_parts[-1] if fallback_parts else "")
+            if g_part or f_part:
+                normalized_data.append({
+                    "gloss": g_part,
+                    "fallback": f_part
+                })
+                
+    return normalized_data
 
-    for prefix in prefixes:
-        if first_line.upper().startswith(prefix):
-            first_line = first_line[len(prefix) :].strip()
 
-    gloss = first_line.strip('"` ')
-
-    for old_token, new_token in VIDEO_TOKEN_REPLACEMENTS.items():
-        gloss = gloss.replace(old_token, new_token)
-
-    gloss = re.sub(r"\[[^\]]*\]", "", gloss)
-    gloss = re.sub(r"\([^)]*\)", "", gloss)
-    gloss = gloss.replace("_", " ").replace("/", " ")
-    gloss = re.sub(r"(?<=[A-Z]{2})-|-(?=[A-Z]{2})", " ", gloss)
-    gloss = re.sub(r"\b(?:AM|IS|ARE|BE|BEEN|BEING|TO)\b", "", gloss)
-    gloss = re.sub(r"\s+", " ", gloss)
-    return gloss.strip()
-
-
-
-def ask_llama(text: str, model: str = DEFAULT_MODEL) -> str:
+def ask_llama(text: str, model: str = DEFAULT_MODEL) -> list:
     payload = {
         "model": model,
         "stream": False,
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": load_system_prompt()},
             {
                 "role": "user",
-                "content": (
-                    "Translate this English text to ASL gloss. "
-                    "Return only the gloss line and nothing else:\n"
-                    f"{text}"
-                ),
+                "content": f"Translate this English text into a structured ASL gloss sequence with fallback synonyms:\n{text}",
             },
         ],
         "options": {
@@ -217,7 +199,7 @@ def main() -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
-    print(gloss)
+    print(json.dumps(gloss, indent=2))
     return 0
 
 
