@@ -45,6 +45,19 @@ def load_wlasl_v3_data():
     return _wlasl_v3_data
 
 
+def get_video_frame_range(video_id):
+    wlasl_v3 = load_wlasl_v3_data()
+    video_id_str = str(video_id)
+    video_id_no_ext = os.path.splitext(video_id_str)[0]
+    for item in wlasl_v3:
+        for inst in item.get("instances", []):
+            inst_vid = str(inst.get("video_id", ""))
+            inst_vid_no_ext = os.path.splitext(inst_vid)[0]
+            if inst_vid == video_id_str or inst_vid_no_ext == video_id_no_ext:
+                return inst.get("frame_start"), inst.get("frame_end"), inst.get("fps")
+    return None, None, None
+
+
 def resolve_best_videos(json_data):
     wlasl_v3 = load_wlasl_v3_data()
     
@@ -153,7 +166,7 @@ def resolve_best_videos(json_data):
         best_signer_id = None
 
     # 3. Resolve each gloss to a final video or placeholder
-    resolved_paths = [] # List of tuples: (gloss, path, is_placeholder)
+    resolved_paths = [] # List of tuples: (gloss, path, is_placeholder, video_id, source)
     
     for entry in json_data:
         if not isinstance(entry, dict):
@@ -170,33 +183,33 @@ def resolve_best_videos(json_data):
                     break
         
         if p1_selected:
-            resolved_paths.append((gloss, p1_selected["path"], False))
+            resolved_paths.append((gloss, p1_selected["path"], False, p1_selected.get("video_id"), p1_selected.get("source")))
             print(f"[Resolver] '{gloss}' resolved via Priority 1 (Signbank, Signer {best_signer_id}): {p1_selected['path']}")
             continue
             
         # Priority 2: videos下 & signbank 的gloss 優先
         if signbank_candidates[gloss_upper]:
             p2_selected = signbank_candidates[gloss_upper][0]
-            resolved_paths.append((gloss, p2_selected["path"], False))
+            resolved_paths.append((gloss, p2_selected["path"], False, p2_selected.get("video_id"), p2_selected.get("source")))
             print(f"[Resolver] '{gloss}' resolved via Priority 2 (Signbank): {p2_selected['path']}")
             continue
             
         # Priority 2b (implicit fallback): Any other WLASL source under videos/
         if other_wlasl_candidates[gloss_upper]:
             p2b_selected = other_wlasl_candidates[gloss_upper][0]
-            resolved_paths.append((gloss, p2b_selected["path"], False))
+            resolved_paths.append((gloss, p2b_selected["path"], False, p2b_selected.get("video_id"), p2b_selected.get("source")))
             print(f"[Resolver] '{gloss}' resolved via Fallback WLASL: {p2b_selected['path']}")
             continue
             
         # Priority 3: 只有microsoft 有，那就使用microsoft
         if microsoft_candidates[gloss_upper]:
             p3_selected = microsoft_candidates[gloss_upper][0]
-            resolved_paths.append((gloss, p3_selected["path"], False))
+            resolved_paths.append((gloss, p3_selected["path"], False, p3_selected.get("video_id"), "microsoft"))
             print(f"[Resolver] '{gloss}' resolved via Priority 3 (Microsoft): {p3_selected['path']}")
             continue
             
         # Priority 4: 如果有missing 的gloss，顯示在subtitle (We mark as placeholder)
-        resolved_paths.append((gloss, None, True))
+        resolved_paths.append((gloss, None, True, None, None))
         print(f"[Resolver] '{gloss}' is missing. Marked for placeholder.")
         
     return resolved_paths
@@ -362,7 +375,7 @@ def clip_and_merge_videos(
 
     try:
         target_size = (640, 480)
-        for gloss, path, is_placeholder in resolved_paths:
+        for gloss, path, is_placeholder, _, _ in resolved_paths:
             if not is_placeholder and path and os.path.exists(path):
                 try:
                     temp_clip = VideoFileClip(path)
@@ -372,7 +385,7 @@ def clip_and_merge_videos(
                 except: continue
 
         clips_to_merge = []
-        for gloss, path, is_placeholder in resolved_paths:
+        for gloss, path, is_placeholder, video_id, source in resolved_paths:
             if is_placeholder:
                 clip = ColorClip(size=target_size, color=(0, 0, 0), duration=1.5)
                 clip_with_subtitle = add_subtitle_to_clip(clip, f"{gloss} (missing)")
@@ -382,6 +395,42 @@ def clip_and_merge_videos(
             elif path and os.path.exists(path):
                 clip = VideoFileClip(path)
                 opened_clips.append(clip)
+                
+                # If the source is not microsoft, we need to read the WLASL dataset JSON
+                # to get the frame_start and frame_end, and clip the video.
+                if source and source.lower() != "microsoft":
+                    frame_start, frame_end, fps = get_video_frame_range(video_id)
+                    if frame_start is not None and frame_end is not None:
+                        video_fps = fps if (fps and fps > 0) else (clip.fps if clip.fps else 25.0)
+                        
+                        t_start = 0.0
+                        if frame_start > 1:
+                            t_start = (frame_start - 1) / video_fps
+                        
+                        t_end = None
+                        if frame_end > 0:
+                            t_end = frame_end / video_fps
+                            
+                        # Ensure time points do not exceed the video's actual duration
+                        if clip.duration:
+                            if t_start >= clip.duration:
+                                t_start = 0.0
+                            if t_end is not None:
+                                if t_end > clip.duration or t_end <= t_start:
+                                    t_end = clip.duration
+                                    
+                        print(f"[Clipper] Clipping '{gloss}' ({video_id}) from frame {frame_start} to {frame_end} "
+                              f"(t_start={t_start:.2f}s, t_end={f'{t_end:.2f}s' if t_end is not None else 'None'}) at {video_fps} fps")
+                        try:
+                            if hasattr(clip, "subclipped"):
+                                clipped_clip = clip.subclipped(t_start, t_end)
+                            else:
+                                clipped_clip = clip.subclip(t_start, t_end)
+                            clip = clipped_clip
+                            opened_clips.append(clip)
+                        except Exception as subclip_err:
+                            print(f"[Warning] Failed to subclip {video_id}: {subclip_err}", file=sys.stderr)
+                            
                 clip_with_subtitle = add_subtitle_to_clip(clip, gloss)
                 clips_to_merge.append(clip_with_subtitle)
                 opened_clips.append(clip_with_subtitle)
