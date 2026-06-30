@@ -16,3 +16,4 @@ code/I3D/archived/
 *Microsoft_Videos/
 *.venv/
 *.__pycache__
+*.pyc
