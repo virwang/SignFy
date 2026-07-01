@@ -105,10 +105,18 @@ def _draw_landmarks_on_image(img_bgr, pose_landmarks, left_hand_landmarks, right
         (5, 9), (9, 13), (13, 17)
     ]
 
-    # Draw face contours (burgundy/dark red: BGR (42, 42, 165))
+    # Colors (BGR)
+    C_POSE_CON   = (160, 160, 160)   # pose connections: light grey
+    C_POSE_LM    = (240, 240, 240)   # pose landmarks: white
+    C_LHAND_CON  = (30, 200, 200)    # left-hand connections: cyan
+    C_LHAND_LM   = (0, 255, 255)     # left-hand landmarks: bright cyan
+    C_RHAND_CON  = (30, 120, 255)    # right-hand connections: orange
+    C_RHAND_LM   = (0, 165, 255)     # right-hand landmarks: bright orange
+    C_FACE       = (42, 42, 165)     # face: burgundy/dark red
+
+    # Draw face contours (burgundy/dark red)
     if face_landmarks:
         from mediapipe.tasks.python.vision.drawing_styles import _FaceLandmarksConnections
-        face_color = (42, 42, 165)
         
         # 1. Face contours (eyes, eyebrows, lips, face oval)
         for conn in _FaceLandmarksConnections.FACE_LANDMARKS_CONTOURS:
@@ -117,7 +125,7 @@ def _draw_landmarks_on_image(img_bgr, pose_landmarks, left_hand_landmarks, right
                 p2 = face_landmarks[conn.end]
                 pt1 = (int(p1.x * w), int(p1.y * h))
                 pt2 = (int(p2.x * w), int(p2.y * h))
-                cv2.line(img_bgr, pt1, pt2, face_color, 1)
+                cv2.line(img_bgr, pt1, pt2, C_FACE, 1, cv2.LINE_AA)
 
         # 2. Nose contours
         for conn in _FaceLandmarksConnections.FACE_LANDMARKS_NOSE:
@@ -126,9 +134,9 @@ def _draw_landmarks_on_image(img_bgr, pose_landmarks, left_hand_landmarks, right
                 p2 = face_landmarks[conn.end]
                 pt1 = (int(p1.x * w), int(p1.y * h))
                 pt2 = (int(p2.x * w), int(p2.y * h))
-                cv2.line(img_bgr, pt1, pt2, face_color, 1)
+                cv2.line(img_bgr, pt1, pt2, C_FACE, 1, cv2.LINE_AA)
 
-    # Draw pose (green)
+    # Draw pose
     if pose_landmarks:
         for start_idx, end_idx in POSE_CONNECTIONS:
             if start_idx < len(pose_landmarks) and end_idx < len(pose_landmarks):
@@ -139,12 +147,13 @@ def _draw_landmarks_on_image(img_bgr, pose_landmarks, left_hand_landmarks, right
                 vis1 = getattr(p1, 'visibility', 1.0)
                 vis2 = getattr(p2, 'visibility', 1.0)
                 if vis1 > 0.5 and vis2 > 0.5:
-                    cv2.line(img_bgr, pt1, pt2, (0, 255, 0), 2)
+                    cv2.line(img_bgr, pt1, pt2, C_POSE_CON, 2, cv2.LINE_AA)
         for lm in pose_landmarks:
             vis = getattr(lm, 'visibility', 1.0)
             if vis > 0.5:
                 pt = (int(lm.x * w), int(lm.y * h))
-                cv2.circle(img_bgr, pt, 3, (0, 0, 255), -1)
+                cv2.circle(img_bgr, pt, 4, C_POSE_LM, -1, cv2.LINE_AA)
+                cv2.circle(img_bgr, pt, 5, (0, 0, 0), 1, cv2.LINE_AA)
 
     # Draw left hand (cyan)
     if left_hand_landmarks:
@@ -154,12 +163,13 @@ def _draw_landmarks_on_image(img_bgr, pose_landmarks, left_hand_landmarks, right
                 p2 = left_hand_landmarks[end_idx]
                 pt1 = (int(p1.x * w), int(p1.y * h))
                 pt2 = (int(p2.x * w), int(p2.y * h))
-                cv2.line(img_bgr, pt1, pt2, (255, 255, 0), 2)
+                cv2.line(img_bgr, pt1, pt2, C_LHAND_CON, 2, cv2.LINE_AA)
         for lm in left_hand_landmarks:
             pt = (int(lm.x * w), int(lm.y * h))
-            cv2.circle(img_bgr, pt, 3, (0, 0, 255), -1)
+            cv2.circle(img_bgr, pt, 4, C_LHAND_LM, -1, cv2.LINE_AA)
+            cv2.circle(img_bgr, pt, 5, (0, 0, 0), 1, cv2.LINE_AA)
 
-    # Draw right hand (yellow)
+    # Draw right hand (orange)
     if right_hand_landmarks:
         for start_idx, end_idx in HAND_CONNECTIONS:
             if start_idx < len(right_hand_landmarks) and end_idx < len(right_hand_landmarks):
@@ -167,10 +177,11 @@ def _draw_landmarks_on_image(img_bgr, pose_landmarks, left_hand_landmarks, right
                 p2 = right_hand_landmarks[end_idx]
                 pt1 = (int(p1.x * w), int(p1.y * h))
                 pt2 = (int(p2.x * w), int(p2.y * h))
-                cv2.line(img_bgr, pt1, pt2, (0, 255, 255), 2)
+                cv2.line(img_bgr, pt1, pt2, C_RHAND_CON, 2, cv2.LINE_AA)
         for lm in right_hand_landmarks:
             pt = (int(lm.x * w), int(lm.y * h))
-            cv2.circle(img_bgr, pt, 3, (0, 0, 255), -1)
+            cv2.circle(img_bgr, pt, 4, C_RHAND_LM, -1, cv2.LINE_AA)
+            cv2.circle(img_bgr, pt, 5, (0, 0, 0), 1, cv2.LINE_AA)
 
 
 def extract(mp4_path: Path, bone_video_path: Optional[Path] = None) -> np.ndarray:
@@ -201,13 +212,28 @@ def extract(mp4_path: Path, bone_video_path: Optional[Path] = None) -> np.ndarra
         print(f"  FPS: {fps:.2f}  |  Total frames: {total or 'unknown'}")
 
         video_initialized = False
+        width, height = 0, 0
 
         for frame_idx, av_frame in enumerate(container.decode(video=0)):
             img_rgb  = av_frame.to_ndarray(format="rgb24")
             
             # Defer VideoWriter initialization until we have the first frame to get exact size
             if bone_video_path is not None and not video_initialized:
-                height, width, _ = img_rgb.shape
+                orig_h, orig_w, _ = img_rgb.shape
+                
+                # Scale up to keep aspect ratio with max side of 800
+                aspect = orig_w / orig_h
+                if aspect > 1.0:
+                    width = 800
+                    height = int(800 / aspect)
+                else:
+                    height = 800
+                    width = int(800 * aspect)
+                
+                # Ensure width and height are even numbers (required by many video codecs)
+                width = (width // 2) * 2
+                height = (height // 2) * 2
+
                 # List of codecs to try: mp4v, avc1, XVID, MJPG
                 codecs = [('mp4v', '.mp4'), ('avc1', '.mp4'), ('XVID', '.avi'), ('MJPG', '.mp4')]
                 for codec, ext in codecs:
@@ -239,7 +265,7 @@ def extract(mp4_path: Path, bone_video_path: Optional[Path] = None) -> np.ndarra
             frames_kp.append(kp)
 
             if out_video is not None:
-                img_bgr = np.zeros_like(img_rgb)
+                img_bgr = np.zeros((height, width, 3), dtype=np.uint8)
                 _draw_landmarks_on_image(
                     img_bgr,
                     result.pose_landmarks,

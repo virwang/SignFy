@@ -13,6 +13,7 @@ import argparse
 from pathlib import Path
 from typing import Union, Dict, List, Optional
 import numpy as np
+# pyrefly: ignore [missing-import]
 from PIL import Image, ImageDraw, ImageFont
 # pyrefly: ignore [missing-import]
 from moviepy import VideoFileClip, concatenate_videoclips, ColorClip
@@ -187,7 +188,7 @@ def resolve_best_videos(json_data):
             print(f"[Resolver] '{gloss}' resolved via Priority 1 (Signbank, Signer {best_signer_id}): {p1_selected['path']}")
             continue
             
-        # Priority 2: videos下 & signbank 的gloss 優先
+        # Priority 2: use signbank videos in videos/ folder
         if signbank_candidates[gloss_upper]:
             p2_selected = signbank_candidates[gloss_upper][0]
             resolved_paths.append((gloss, p2_selected["path"], False, p2_selected.get("video_id"), p2_selected.get("source")))
@@ -201,16 +202,16 @@ def resolve_best_videos(json_data):
             print(f"[Resolver] '{gloss}' resolved via Fallback WLASL: {p2b_selected['path']}")
             continue
             
-        # Priority 3: 只有microsoft 有，那就使用microsoft
+        # Priority 3: use microsoft video when the gloss only exits in microsoft dataset
         if microsoft_candidates[gloss_upper]:
             p3_selected = microsoft_candidates[gloss_upper][0]
             resolved_paths.append((gloss, p3_selected["path"], False, p3_selected.get("video_id"), "microsoft"))
             print(f"[Resolver] '{gloss}' resolved via Priority 3 (Microsoft): {p3_selected['path']}")
             continue
             
-        # Priority 4: 如果有missing 的gloss，顯示在subtitle (We mark as placeholder)
+        # Priority 4: if the gloss is missing, show at subtitle
         resolved_paths.append((gloss, None, True, None, None))
-        print(f"[Resolver] '{gloss}' is missing. Marked for placeholder.")
+        print(f"[Resolver] '{gloss}' is missing.")
         
     return resolved_paths
 
