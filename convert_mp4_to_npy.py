@@ -51,8 +51,11 @@ def _ensure_model_file() -> Path:
 
 
 def _build_landmarker():
+    # pyrefly: ignore [missing-import]
     from mediapipe.tasks.python.core.base_options import BaseOptions
+    # pyrefly: ignore [missing-import]
     from mediapipe.tasks.python.vision.core.vision_task_running_mode import VisionTaskRunningMode
+    # pyrefly: ignore [missing-import]
     from mediapipe.tasks.python.vision.holistic_landmarker import (
         HolisticLandmarker,
         HolisticLandmarkerOptions,
@@ -84,7 +87,9 @@ def extract(mp4_path: Path) -> np.ndarray:
     Extract keypoints frame-by-frame and return a float32 array of shape (T, 225).
     A new landmarker instance is created per call (VIDEO mode timestamp constraint).
     """
+    # pyrefly: ignore [missing-import]
     import av
+    # pyrefly: ignore [missing-import]
     import mediapipe as mp
 
     landmarker = _build_landmarker()
@@ -157,7 +162,9 @@ def main():
         sys.exit(1)
 
     try:
+        # pyrefly: ignore [missing-import]
         import av        # noqa: F401
+        # pyrefly: ignore [missing-import]
         import mediapipe # noqa: F401
     except ImportError as e:
         print(f"Missing dependency: {e}")
