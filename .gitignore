@@ -7,5 +7,5 @@ code/I3D/archived/
 *.xlsx
 *Microsoft_Videos/
 *.venv/
-*__pycache__/
 *.pyc
+*__pycache__/
