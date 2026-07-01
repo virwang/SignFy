@@ -363,8 +363,86 @@ def run_clipping(args):
     print(f"Missing source files:    {stats['missing']}")
     print("--------------------------")
 
+def run_single_file(args):
+    """
+    Clips or copies a single video file based on explicit arguments or JSON lookup.
+    """
+    src_path = args.input_file
+    if not os.path.exists(src_path):
+        print(f"ERROR: Input file not found: {src_path}")
+        return
+        
+    filename = os.path.basename(src_path)
+    
+    # Resolve frame range
+    frame_start = args.frame_start
+    frame_end = args.frame_end
+    
+    # If not provided, try to look up in WLASL JSON
+    wlasl_json = args.wlasl_json if args.wlasl_json else os.path.join(get_script_dir(), "WLASL_v03.json")
+    
+    if frame_start is None or frame_end is None:
+        print(f"Loading WLASL metadata from: {wlasl_json}")
+        wlasl_mapping = load_wlasl_mapping(wlasl_json)
+        
+        # Determine video_id from filename (strip extension)
+        video_id_str = os.path.splitext(filename)[0]
+        wlasl_info = wlasl_mapping.get(filename) or wlasl_mapping.get(video_id_str)
+        
+        if wlasl_info:
+            if frame_start is None:
+                frame_start = wlasl_info.get("frame_start")
+            if frame_end is None:
+                frame_end = wlasl_info.get("frame_end")
+            print(f"Found WLASL frame metadata for {filename}: frame_start={frame_start}, frame_end={frame_end}")
+        else:
+            print(f"WARNING: WLASL frame metadata not found for {filename}.")
+            
+    # Set default values if still None
+    if frame_start is None:
+        frame_start = 1
+    if frame_end is None:
+        frame_end = -1
+        
+    # Determine output directory
+    output_dir = args.output_dir
+    if not output_dir:
+        # Check parent folder name
+        parent_name = os.path.basename(os.path.dirname(os.path.abspath(src_path))).lower()
+        if "microsoft" in parent_name:
+            output_dir = os.path.join(WORKSPACE_DIR, "microsoft_cut")
+        else:
+            output_dir = os.path.join(WORKSPACE_DIR, "videos_cut")
+        print(f"No output_dir specified. Defaulting to: {output_dir}")
+        
+    os.makedirs(output_dir, exist_ok=True)
+    dst_path = os.path.join(output_dir, filename)
+    
+    # Determine if we need to clip
+    requires_clipping = (frame_start > 1) or (frame_end != -1)
+    
+    print(f"Processing single video: {src_path} -> {dst_path}")
+    print(f"Range: frame_start={frame_start}, frame_end={frame_end} (requires_clipping={requires_clipping})")
+    
+    action, success, msg = process_video_task(
+        src_path,
+        dst_path,
+        frame_start,
+        frame_end,
+        requires_clipping,
+        not args.no_copy_uncut,
+        args.engine
+    )
+    
+    if success:
+        print(f"SUCCESS: Single file process completed ({action}): {msg}")
+    else:
+        print(f"ERROR: Single file process failed: {msg}")
+
 def main():
     parser = argparse.ArgumentParser(description="Clip video files based on frame start and end metadata.")
+    
+    # Batch processing arguments
     parser.add_argument("--video_dirs", nargs="+", default=None,
                         help="List of input video folders (e.g. videos Microsoft_Videos)")
     parser.add_argument("--output_dirs", nargs="+", default=None,
@@ -373,15 +451,30 @@ def main():
                         help="Path to best_asl_videos.json mapping file")
     parser.add_argument("--wlasl_json", default=None,
                         help="Path to WLASL_v03.json mapping file")
-    parser.add_argument("--engine", choices=["opencv", "moviepy"], default="opencv",
-                        help="Primary video cutting library (default: opencv)")
+    
+    # Single file processing arguments
+    parser.add_argument("--input_file", default=None,
+                        help="Path to a single input video file to clip.")
+    parser.add_argument("--output_dir", default=None,
+                        help="Output directory to save the clipped single video.")
+    parser.add_argument("--frame_start", type=int, default=None,
+                        help="Start frame for clipping (1-indexed).")
+    parser.add_argument("--frame_end", type=int, default=None,
+                        help="End frame for clipping.")
+    
+    # Common arguments
+    parser.add_argument("--engine", choices=["opencv", "moviepy"], default="moviepy",
+                        help="Primary video cutting library (default: moviepy)")
     parser.add_argument("--no_copy_uncut", action="store_true",
                         help="Do not copy files that don't need clipping")
     parser.add_argument("--num_workers", type=int, default=8,
                         help="Number of threads for batch conversion (default: 8)")
     args = parser.parse_args()
     
-    run_clipping(args)
+    if args.input_file:
+        run_single_file(args)
+    else:
+        run_clipping(args)
 
 if __name__ == "__main__":
     main()

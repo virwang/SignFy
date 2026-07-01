@@ -8,4 +8,5 @@ code/I3D/archived/
 *Microsoft_Videos/
 *.venv/
 *.pyc
+*test.py
 *__pycache__/
