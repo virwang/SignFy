@@ -95,7 +95,7 @@ def clean_gloss(response: str) -> list:
         fallback = str(item.get("fallback", "")).strip().upper()
         
         # Apply normalization replacements
-        # If the user input gloss can be found in the asl_mis_wlasl.json, then use the user input one
+        # If the user input gloss can be found in the best_asl_videos.json, then use the user input one
         if is_gloss_in_db(gloss):
             fallback = gloss
         else:

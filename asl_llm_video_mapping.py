@@ -20,9 +20,9 @@ from typing import List, Dict, Tuple
 
 # Paths
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-MAPPLING_PATH = os.path.join(SCRIPT_DIR, "data_preprocessing", "asl_mis_wlasl.json")
-MS_VIDEO_DIR = os.path.join(SCRIPT_DIR, "Microsoft_Videos")
-OTHER_VIDEO_DIR = os.path.join(SCRIPT_DIR, "videos")
+MAPPLING_PATH = os.path.join(SCRIPT_DIR, "data_preprocessing", "best_asl_videos.json")
+MS_VIDEO_DIR = os.path.join(SCRIPT_DIR, "Microsoft_best")
+OTHER_VIDEO_DIR = os.path.join(SCRIPT_DIR, "videos_cut")
 
 # In-memory video file caches
 _ms_video_cache = None
@@ -78,17 +78,24 @@ _valid_gloss_cache = None
 
 def get_valid_glosses() -> set:
     """
-    Returns a cached set of all uppercase gloss names from asl_mis_wlasl.json.
+    Returns a cached set of all uppercase gloss names from the mapping file.
     """
     global _valid_gloss_cache
     if _valid_gloss_cache is None:
         try:
             data = load_video_filenames()
-            _valid_gloss_cache = {
-                entry.get("gloss", "").upper()
-                for entry in data
-                if isinstance(entry, dict) and entry.get("gloss")
-            }
+            if isinstance(data, dict):
+                _valid_gloss_cache = {
+                    str(k).upper() for k in data.keys()
+                }
+            elif isinstance(data, list):
+                _valid_gloss_cache = {
+                    entry.get("gloss", "").upper()
+                    for entry in data
+                    if isinstance(entry, dict) and entry.get("gloss")
+                }
+            else:
+                _valid_gloss_cache = set()
         except Exception as e:
             print(f"[Warning] Failed to load valid gloss cache: {e}", file=sys.stderr)
             _valid_gloss_cache = set()
@@ -96,7 +103,7 @@ def get_valid_glosses() -> set:
 
 def is_gloss_in_db(gloss: str) -> bool:
     """
-    Checks if the gloss is present in the asl_mis_wlasl.json mapping file.
+    Checks if the gloss is present in the best_asl_videos.json mapping file.
     """
     if not gloss:
         return False
@@ -130,25 +137,16 @@ def find_matching_glosses(json_data, llm_output):
     ms_cache, other_cache = get_video_caches()
     
     gloss_index = {}
-    for entry in json_data:
-        if not isinstance(entry, dict):
-            continue
-        gloss = str(entry.get('gloss', '')).upper()
-        if not gloss:
-            continue
-        items = entry.get('item')
-        if not isinstance(items, list):
-            continue
-            
-        found_items = []
-        for i in items:
-            if not isinstance(i, dict):
+    if isinstance(json_data, dict):
+        for gloss, entry in json_data.items():
+            if not isinstance(entry, dict):
                 continue
-            video_id = i.get('video_id')
+            gloss_upper = gloss.upper()
+            video_id = entry.get('video_id')
             if not video_id:
                 continue
             video_id = str(video_id)
-            source = str(i.get('source', '')).lower()
+            source = str(entry.get('source', '')).lower()
             
             if source == 'microsoft':
                 video_name = os.path.splitext(video_id)[0]
@@ -156,12 +154,43 @@ def find_matching_glosses(json_data, llm_output):
             else:
                 is_found = video_id in other_cache
                 
-            i['status'] = 'Found' if is_found else 'Missing'
+            entry_copy = entry.copy()
+            entry_copy['status'] = 'Found' if is_found else 'Missing'
             if is_found:
-                found_items.append(i)
+                gloss_index[gloss_upper] = [entry_copy]
+    else:
+        for entry in json_data:
+            if not isinstance(entry, dict):
+                continue
+            gloss = str(entry.get('gloss', '')).upper()
+            if not gloss:
+                continue
+            items = entry.get('item')
+            if not isinstance(items, list):
+                continue
                 
-        if found_items:
-            gloss_index[gloss] = found_items
+            found_items = []
+            for i in items:
+                if not isinstance(i, dict):
+                    continue
+                video_id = i.get('video_id')
+                if not video_id:
+                    continue
+                video_id = str(video_id)
+                source = str(i.get('source', '')).lower()
+                
+                if source == 'microsoft':
+                    video_name = os.path.splitext(video_id)[0]
+                    is_found = video_name in ms_cache
+                else:
+                    is_found = video_id in other_cache
+                    
+                i['status'] = 'Found' if is_found else 'Missing'
+                if is_found:
+                    found_items.append(i)
+                    
+            if found_items:
+                gloss_index[gloss] = found_items
 
     matching_glosses = {}
     normalized_pairs = _normalize_llm_output(llm_output)
@@ -180,9 +209,9 @@ def find_matching_glosses(json_data, llm_output):
             video_id = first_found_item.get('video_id', 'N/A')
 
             if source == 'microsoft':
-                video_path = "./Microsoft_Videos/"
+                video_path = "./Microsoft_best/"
             else:
-                video_path = "./videos/"
+                video_path = "./videos_cut/"
 
             # Maintain original primary gloss as key in output mapping for Stage 3 pipeline integration
             matching_glosses[primary] = {
@@ -199,24 +228,16 @@ def record_not_found_glosses(json_data, llm_output):
     ms_cache, other_cache = get_video_caches()
     found_glosses = set()
     
-    for entry in json_data:
-        if not isinstance(entry, dict):
-            continue
-        gloss = str(entry.get('gloss', '')).upper()
-        if not gloss:
-            continue
-        items = entry.get('item')
-        if not isinstance(items, list):
-            continue
-            
-        for i in items:
-            if not isinstance(i, dict):
+    if isinstance(json_data, dict):
+        for gloss, entry in json_data.items():
+            if not isinstance(entry, dict):
                 continue
-            video_id = i.get('video_id')
+            gloss_upper = gloss.upper()
+            video_id = entry.get('video_id')
             if not video_id:
                 continue
             video_id = str(video_id)
-            source = str(i.get('source', '')).lower()
+            source = str(entry.get('source', '')).lower()
             
             if source == 'microsoft':
                 video_name = os.path.splitext(video_id)[0]
@@ -225,8 +246,36 @@ def record_not_found_glosses(json_data, llm_output):
                 is_found = video_id in other_cache
                 
             if is_found:
-                found_glosses.add(gloss)
-                break
+                found_glosses.add(gloss_upper)
+    else:
+        for entry in json_data:
+            if not isinstance(entry, dict):
+                continue
+            gloss = str(entry.get('gloss', '')).upper()
+            if not gloss:
+                continue
+            items = entry.get('item')
+            if not isinstance(items, list):
+                continue
+                
+            for i in items:
+                if not isinstance(i, dict):
+                    continue
+                video_id = i.get('video_id')
+                if not video_id:
+                    continue
+                video_id = str(video_id)
+                source = str(i.get('source', '')).lower()
+                
+                if source == 'microsoft':
+                    video_name = os.path.splitext(video_id)[0]
+                    is_found = video_name in ms_cache
+                else:
+                    is_found = video_id in other_cache
+                    
+                if is_found:
+                    found_glosses.add(gloss)
+                    break
                 
     normalized_pairs = _normalize_llm_output(llm_output)
     not_found_glosses = []
@@ -271,24 +320,16 @@ def find_video_records(llm_output, english_input=None, output_excel_path="asl_ma
 
     # Pre-process the JSON data to update/verify status dynamically using caches
     gloss_index = {}
-    for entry in json_data:
-        if not isinstance(entry, dict):
-            continue
-        gloss = str(entry.get('gloss', '')).upper()
-        if not gloss:
-            continue
-        items = entry.get('item')
-        if not isinstance(items, list):
-            continue
-            
-        for i in items:
-            if not isinstance(i, dict):
+    if isinstance(json_data, dict):
+        for gloss, entry in json_data.items():
+            if not isinstance(entry, dict):
                 continue
-            video_id = i.get('video_id')
+            gloss_upper = gloss.upper()
+            video_id = entry.get('video_id')
             if not video_id:
                 continue
             video_id = str(video_id)
-            source = str(i.get('source', '')).lower()
+            source = str(entry.get('source', '')).lower()
             
             if source == 'microsoft':
                 video_name = os.path.splitext(video_id)[0]
@@ -296,9 +337,38 @@ def find_video_records(llm_output, english_input=None, output_excel_path="asl_ma
             else:
                 is_found = video_id in other_cache
                 
-            i['status'] = 'Found' if is_found else 'Missing'
-            
-        gloss_index[gloss] = items
+            entry_copy = entry.copy()
+            entry_copy['status'] = 'Found' if is_found else 'Missing'
+            gloss_index[gloss_upper] = [entry_copy]
+    else:
+        for entry in json_data:
+            if not isinstance(entry, dict):
+                continue
+            gloss = str(entry.get('gloss', '')).upper()
+            if not gloss:
+                continue
+            items = entry.get('item')
+            if not isinstance(items, list):
+                continue
+                
+            for i in items:
+                if not isinstance(i, dict):
+                    continue
+                video_id = i.get('video_id')
+                if not video_id:
+                    continue
+                video_id = str(video_id)
+                source = str(i.get('source', '')).lower()
+                
+                if source == 'microsoft':
+                    video_name = os.path.splitext(video_id)[0]
+                    is_found = video_name in ms_cache
+                else:
+                    is_found = video_id in other_cache
+                    
+                i['status'] = 'Found' if is_found else 'Missing'
+                
+            gloss_index[gloss] = items
 
     matching_glosses = {}
     found_videos_list = []

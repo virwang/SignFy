@@ -1,0 +1,28 @@
+[
+    {
+        "gloss": "APPLE",
+        "fallback": "APPLE",
+        "chosen_gloss": "APPLE",
+        "fallback_used": false,
+        "status": "found",
+        "item": [
+            {
+                "video_id": "03006",
+                "source": "aslu"
+            }
+        ]
+    },
+    {
+        "gloss": "PARK",
+        "fallback": "PARK",
+        "chosen_gloss": "PARK",
+        "fallback_used": false,
+        "status": "found",
+        "item": [
+            {
+                "video_id": "5022117525359895-PARK.mp4",
+                "source": "microsoft"
+            }
+        ]
+    }
+]

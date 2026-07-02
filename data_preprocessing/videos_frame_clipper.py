@@ -298,10 +298,18 @@ def run_clipping(args):
             dst_path = os.path.join(target_dir, dst_filename)
             
             # Lookup frame_start / frame_end
-            frame_start, frame_end = None, None
+            frame_start = item.get("frame_start")
+            frame_end = item.get("frame_end")
             requires_clipping = False
             
-            if source != "microsoft":
+            if frame_start is not None or frame_end is not None:
+                if frame_start is None:
+                    frame_start = 1
+                if frame_end is None:
+                    frame_end = -1
+                if (frame_start > 1) or (frame_end != -1):
+                    requires_clipping = True
+            elif source != "microsoft":
                 vid_clean = os.path.splitext(video_id_str)[0]
                 wlasl_info = wlasl_mapping.get(video_id_str) or wlasl_mapping.get(vid_clean)
                 if wlasl_info:
