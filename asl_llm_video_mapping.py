@@ -1,7 +1,7 @@
 """_summary_
         This script performs the following tasks:
         1. Receive the translated english text input and the corresponding ASL gloss output from the Llama model.
-        2. Load the WLASL dataset and check if the corresponding videos exist in the Microsoft and WLASL video directories.
+        2. Load the dataset and check if the corresponding videos exist in the Microsoft and WLASL video directories.
         3. Generate a comprehensive report in Excel format, categorizing the results into "Found" and "Missing" videos, and providing statistics on the distribution of glosses across sources.
         4. The script is optimized for performance by caching video filenames in memory to avoid repeated disk access, and it handles edge cases such as missing fields in the input JSON gracefully.   
 """
@@ -12,7 +12,6 @@ import re
 import sys
 import uuid
 
-import urllib.request
 import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
@@ -21,7 +20,7 @@ from typing import List, Dict, Tuple
 # Paths
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 MAPPLING_PATH = os.path.join(SCRIPT_DIR, "data_preprocessing", "best_asl_videos.json")
-MS_VIDEO_DIR = os.path.join(SCRIPT_DIR, "Microsoft_best")
+MS_VIDEO_DIR = os.path.join(SCRIPT_DIR, "microsoft_cut")
 OTHER_VIDEO_DIR = os.path.join(SCRIPT_DIR, "videos_cut")
 
 # In-memory video file caches
@@ -47,7 +46,7 @@ def get_video_caches(ms_dir=MS_VIDEO_DIR, other_dir=OTHER_VIDEO_DIR):
                 if f.lower().endswith(".mp4"):
                     _other_video_cache.add(os.path.splitext(f)[0])
                     
-        print(f"[Cache] Loaded {len(_ms_video_cache)} Microsoft videos and {len(_other_video_cache)} WLASL videos in memory.")
+        print(f"[Cache] Loaded {len(_ms_video_cache)} Microsoft videos_cut and {len(_other_video_cache)} WLASL videos_cut in memory.")
         
     return _ms_video_cache, _other_video_cache
 
@@ -209,7 +208,7 @@ def find_matching_glosses(json_data, llm_output):
             video_id = first_found_item.get('video_id', 'N/A')
 
             if source == 'microsoft':
-                video_path = "./Microsoft_best/"
+                video_path = "./microsoft_cut/"
             else:
                 video_path = "./videos_cut/"
 
@@ -223,7 +222,7 @@ def find_matching_glosses(json_data, llm_output):
 
 def record_not_found_glosses(json_data, llm_output):
     """
-    Retrieve primary glosses in llm_output that have no found videos (neither primary nor fallback found).
+    Retrieve primary glosses in llm_output that have no found videos_cut (neither primary nor fallback found).
     """
     ms_cache, other_cache = get_video_caches()
     found_glosses = set()
@@ -383,7 +382,7 @@ def find_video_records(llm_output, english_input=None, output_excel_path="asl_ma
         gloss_upper = primary
         fallback_upper = fallback
         
-        # Check if primary exists and has found videos
+        # Check if primary exists and has found videos_cut
         primary_has_found = False
         if gloss_upper in gloss_index:
             primary_has_found = any(i.get('status') == 'Found' for i in gloss_index[gloss_upper])
@@ -429,10 +428,10 @@ def find_video_records(llm_output, english_input=None, output_excel_path="asl_ma
                     source_stats[source]["found"] += 1
                     
                     if source == 'microsoft':
-                        dir_path = "./Microsoft_Videos/"
+                        dir_path = "./microsoft_cut/"
                         full_path = os.path.abspath(os.path.join(MS_VIDEO_DIR, video_id))
                     else:
-                        dir_path = "./videos/"
+                        dir_path = "./videos_cut/"
                         actual_filename = video_id
                         if not actual_filename.lower().endswith(".mp4"):
                             actual_filename += ".mp4"
@@ -448,9 +447,9 @@ def find_video_records(llm_output, english_input=None, output_excel_path="asl_ma
                 else:
                     source_stats[source]["missing"] += 1
                     if source == 'microsoft':
-                        exp_dir = "./Microsoft_Videos/"
+                        exp_dir = "./microsoft_cut/"
                     else:
-                        exp_dir = "./videos/"
+                        exp_dir = "./videos_cut/"
                         
                     missing_videos_list.append({
                         "Gloss": display_gloss,
@@ -473,9 +472,9 @@ def find_video_records(llm_output, english_input=None, output_excel_path="asl_ma
                 video_id = first_found_item.get('video_id', 'N/A')
 
                 if source == 'microsoft':
-                    video_path = "./Microsoft_Videos/"
+                    video_path = "./microsoft_cut/"
                 else:
-                    video_path = "./videos/"
+                    video_path = "./videos_cut/"
 
                 matching_glosses[primary] = {
                     "video_id": video_id,

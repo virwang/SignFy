@@ -1,12 +1,12 @@
 """
 media_pipline_converter.py — Extract keypoints from .mp4 file into .npy file.
-Outputs are saved in the `bone_sign_out` folder.
+Output is saved in the `bone_sign_out` folder.
 """
 
 import sys
 import urllib.request
 from pathlib import Path
-from typing import Union, Tuple
+from typing import Union
 
 import numpy as np
 
@@ -124,13 +124,13 @@ def extract(mp4_path: Path) -> np.ndarray:
 # Core API
 # ============================================================
 
-def convert_video(mp4_path: Union[str, Path]) -> Tuple[str, str]:
+def convert_video(mp4_path: Union[str, Path]) -> str:
     """
-    Extract keypoints from an .mp4 video file and save them to BOTH .npy and .json files.
+    Extract keypoints from an .mp4 video file and save them to .npy files.
     Outputs are stored under the 'bone_sign_out' directory in the project root.
     
     Returns:
-        A tuple of (npy_path_str, json_path_str) representing the output file locations.
+        A tuple of (npy_path_str) representing the output file locations.
     """
     mp4_p = Path(mp4_path).resolve()
     if not mp4_p.exists():
