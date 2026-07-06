@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-check_numpy_coverage.py — Analyze MediaPipe hand detection coverage (non-zero rate) from .npy files.
+check_numpy_coverage.py — Analyze MediaPipe hand, face, and trunk detection coverage from .npy files.
 
 Usage:
   python check_numpy_coverage.py <path_to_npy_file_or_directory> [--workers N] [--threshold 0.7] [--export_excel path/to/output.xlsx]
@@ -26,6 +26,12 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
+try:
+    from tqdm import tqdm
+    _HAS_TQDM = True
+except ImportError:
+    _HAS_TQDM = False
+
 # Set stdout/stderr encoding to UTF-8 to prevent encoding errors on Windows terminals
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -33,24 +39,26 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
 # Keypoint layout slices (matching video_npy_converter.py)
-# Pose: 0 to 99 (33 * 3)
-# Face: 99 to 1533 (478 * 3)
-# Left Hand: 1533 to 1596 (21 * 3)
-# Right Hand: 1596 to 1659 (21 * 3)
-LHAND_SL = slice(1533, 1596)
-RHAND_SL = slice(1596, 1659)
+# Trunk: 0 to 24 (8 * 3)
+# Face: 24 to 1458 (478 * 3)
+# Left Hand: 1458 to 1521 (21 * 3)
+# Right Hand: 1521 to 1584 (21 * 3)
+TRUNK_SL = slice(0, 24)
+FACE_SL = slice(24, 1458)
+LHAND_SL = slice(1458, 1521)
+RHAND_SL = slice(1521, 1584)
 
 
 def analyze_single_file(file_path: Path) -> Optional[dict]:
-    """Load a single .npy file and compute hand-detection coverage stats."""
+    """Load a single .npy file and compute detection coverage stats."""
     try:
         data = np.load(str(file_path))
     except Exception as e:
         print(f"Error loading {file_path.name}: {e}")
         return None
 
-    if data.ndim != 2 or data.shape[1] != 1659:
-        print(f"Warning: {file_path.name} has unexpected shape {data.shape} (expected T x 1659)")
+    if data.ndim != 2 or data.shape[1] != 1584:
+        print(f"Warning: {file_path.name} has unexpected shape {data.shape} (expected T x 1584)")
         return None
 
     T = data.shape[0]
@@ -58,21 +66,28 @@ def analyze_single_file(file_path: Path) -> Optional[dict]:
         return {
             "filename": file_path.name,
             "total_frames": 0,
+            "trunk_count": 0, "trunk_cov": 0.0,
+            "face_count": 0, "face_cov": 0.0,
             "left_count": 0, "left_cov": 0.0,
             "right_count": 0, "right_cov": 0.0,
             "either_count": 0, "either_cov": 0.0,
             "both_count": 0, "both_cov": 0.0,
         }
 
-    # Slice left/right hand keypoints once, reuse views (no copies made here)
+    # Slice keypoints
+    trunk_kp = data[:, TRUNK_SL]
+    face_kp = data[:, FACE_SL]
     lh_kp = data[:, LHAND_SL]
     rh_kp = data[:, RHAND_SL]
 
-    # np.any(x != 0) is equivalent to ~np.all(x == 0) but avoids the extra
-    # negation pass over the array — cheaper for large T.
+    # np.any(x != 0) is equivalent to ~np.all(x == 0)
+    trunk_detected = np.any(trunk_kp != 0.0, axis=1)
+    face_detected = np.any(face_kp != 0.0, axis=1)
     lh_detected = np.any(lh_kp != 0.0, axis=1)
     rh_detected = np.any(rh_kp != 0.0, axis=1)
 
+    trunk_count = int(np.count_nonzero(trunk_detected))
+    face_count = int(np.count_nonzero(face_detected))
     lh_count = int(np.count_nonzero(lh_detected))
     rh_count = int(np.count_nonzero(rh_detected))
     either_count = int(np.count_nonzero(lh_detected | rh_detected))
@@ -81,6 +96,8 @@ def analyze_single_file(file_path: Path) -> Optional[dict]:
     return {
         "filename": file_path.name,
         "total_frames": T,
+        "trunk_count": trunk_count, "trunk_cov": trunk_count / T,
+        "face_count": face_count, "face_cov": face_count / T,
         "left_count": lh_count, "left_cov": lh_count / T,
         "right_count": rh_count, "right_cov": rh_count / T,
         "either_count": either_count, "either_cov": either_count / T,
@@ -93,10 +110,12 @@ def print_single_result(res: dict) -> None:
     print(f"File Name: {res['filename']}")
     print("-" * 60)
     print(f"Total Frames (T): {res['total_frames']}")
+    print(f"Trunk Detection Rate:      {res['trunk_count']:4d} / {res['total_frames']} ({res['trunk_cov']:.2%})")
+    print(f"Face Detection Rate:       {res['face_count']:4d} / {res['total_frames']} ({res['face_cov']:.2%})")
     print(f"Left Hand Detection Rate:  {res['left_count']:4d} / {res['total_frames']} ({res['left_cov']:.2%})")
     print(f"Right Hand Detection Rate: {res['right_count']:4d} / {res['total_frames']} ({res['right_cov']:.2%})")
     print(f"Either Hand Detected:      {res['either_count']:4d} / {res['total_frames']} ({res['either_cov']:.2%})")
-    print(f"Both Hands Detected:        {res['both_count']:4d} / {res['total_frames']} ({res['both_cov']:.2%})")
+    print(f"Both Hands Detected:       {res['both_count']:4d} / {res['total_frames']} ({res['both_cov']:.2%})")
     print("=" * 60)
 
 
@@ -112,7 +131,12 @@ def analyze_directory(dir_path: Path, workers: int) -> list:
     results = []
     with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = {executor.submit(analyze_single_file, f): f for f in npy_files}
-        for future in as_completed(futures):
+        
+        iterator = as_completed(futures)
+        if _HAS_TQDM:
+            iterator = tqdm(iterator, total=len(futures), desc="Coverage Check")
+            
+        for future in iterator:
             res = future.result()
             if res:
                 results.append(res)
@@ -127,11 +151,12 @@ def print_directory_summary(results: list, threshold: float, export_excel: Optio
         print("Failed to successfully analyze any numpy files.")
         return
 
-    # Single pass accumulation instead of 4 separate list comprehensions over `results`.
     n = len(results)
-    sum_left = sum_right = sum_either = sum_both = 0.0
+    sum_trunk = sum_face = sum_left = sum_right = sum_either = sum_both = 0.0
     total_frames = 0
     for r in results:
+        sum_trunk += r["trunk_cov"]
+        sum_face += r["face_cov"]
         sum_left += r["left_cov"]
         sum_right += r["right_cov"]
         sum_either += r["either_cov"]
@@ -139,39 +164,44 @@ def print_directory_summary(results: list, threshold: float, export_excel: Optio
         total_frames += r["total_frames"]
 
     print("\n" + "=" * 60)
-    print("[Overall Dataset Hand Detection Coverage Summary]")
+    print("[Overall Dataset Hand/Face/Trunk Detection Coverage Summary]")
     print("-" * 60)
     print(f"Total Files Analyzed:       {n}")
     print(f"Total Accumulated Frames:   {total_frames}")
+    print(f"Average Trunk Coverage:      {sum_trunk / n:.2%}")
+    print(f"Average Face Coverage:       {sum_face / n:.2%}")
     print(f"Average Left Hand Coverage:  {sum_left / n:.2%}")
     print(f"Average Right Hand Coverage: {sum_right / n:.2%}")
     print(f"Average Either Hand Coverage:{sum_either / n:.2%}")
     print(f"Average Both Hands Coverage: {sum_both / n:.2%}")
     print("=" * 60)
 
+    # We typically threshold on Either Hand Coverage, but could also consider face/trunk.
+    # Sticking to either hand coverage as the primary threshold metric for now.
     threshold_files = [r for r in results if r["either_cov"] <= threshold]
     threshold_files.sort(key=lambda x: x["either_cov"])
 
     print(f"\n[Files with Either Hand Coverage <= {threshold:.0%}] ({len(threshold_files)} files)")
     if threshold_files:
-        print("-" * 75)
-        print(f"{'No.':<5} | {'Filename':<15} | {'Frames':<8} | {'Left Cov':<10} | {'Right Cov':<10} | {'Either Cov':<10}")
-        print("-" * 75)
+        print("-" * 105)
+        print(f"{'No.':<5} | {'Filename':<15} | {'Frames':<8} | {'Trunk Cov':<10} | {'Face Cov':<10} | {'Left Cov':<10} | {'Right Cov':<10} | {'Either Cov':<10}")
+        print("-" * 105)
         for idx, w in enumerate(threshold_files, 1):
             print(f"{idx:<5} | {w['filename']:<15} | {w['total_frames']:<8} | "
-                  f"{w['left_cov']:<10.1%} | {w['right_cov']:<10.1%} | {w['either_cov']:<10.1%}")
-        print("-" * 75)
+                  f"{w['trunk_cov']:<10.1%} | {w['face_cov']:<10.1%} | {w['left_cov']:<10.1%} | {w['right_cov']:<10.1%} | {w['either_cov']:<10.1%}")
+        print("-" * 105)
     else:
         print("  All files meet or exceed the coverage threshold!")
 
     if export_excel:
         df = pd.DataFrame(threshold_files if threshold_files else results)
-        # Format the coverage columns as percentages for better readability in Excel if desired, 
-        # or leave as floats so users can sort numerically. Leaving as floats is usually better for Excel.
-        # Rename columns to be more human readable
         df = df.rename(columns={
             "filename": "Filename",
             "total_frames": "Total Frames",
+            "trunk_count": "Trunk Detected Frames",
+            "trunk_cov": "Trunk Coverage",
+            "face_count": "Face Detected Frames",
+            "face_cov": "Face Coverage",
             "left_count": "Left Detected Frames",
             "left_cov": "Left Coverage",
             "right_count": "Right Detected Frames",
@@ -181,14 +211,13 @@ def print_directory_summary(results: list, threshold: float, export_excel: Optio
             "both_count": "Both Detected Frames",
             "both_cov": "Both Coverage"
         })
-        # Format as percentages for Excel string (Optional, but let's keep numeric so Excel can sort)
         df.to_excel(export_excel, index=False)
         print(f"\n[Success] Exported {len(threshold_files)} files to {export_excel}")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Analyze MediaPipe hand detection coverage from .npy files."
+        description="Analyze MediaPipe hand, face, and trunk detection coverage from .npy files."
     )
     parser.add_argument("path", type=str, help="Path to a .npy file or a directory of .npy files")
     parser.add_argument("--workers", type=int, default=8, help="Thread pool size for directory mode (default: 8)")

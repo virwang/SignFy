@@ -1,12 +1,51 @@
-code/I3D/archived/
-*.pt
+# IDE / Editor configuration
+.vscode/
+.idea/
+.DS_Store
+
+# Virtual environments
+asl_env/
+hamer_env/
+.venv/
+venv/
+env/
+
+# Python cache / Compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Logs & Packages
 *.log
 *.zip
-*.mp4
+*.tar
+*.tar.gz
+*.part
+
+# Machine Learning / Models
+*.pt
+*.pth
+
+# Project-specific Data & Videos (Datasets, raw videos & intermediate steps)
+_DATA/
+scratch/
 *videos/
+*Videos/
+*videos_raw/
+*Videos_raw/
+*best/
+*cut/
+*.mp4
 *.xlsx
-*Microsoft_Videos/
-*.venv/
-*.pyc
+
+# Keypoint/Numpy outputs & processed data
+*npy/
+bone_sign_out/
+face_npy/
+sign_out/
+gloss_video_mapping_output/
+
+# Archived code
+code/I3D/archived/
 *test.py
-*__pycache__/
