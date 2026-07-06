@@ -38,11 +38,15 @@ scratch/
 *cut/
 *.mp4
 *.xlsx
+hamer/my_video_input_frames/
+hamer/my_video_output_frames/
+hamer/holistic_landmarker.task
+hamer/test_output.npy
+hamer/hamer.egg-info/
+hamer/official_demo_out/
 
 # Keypoint/Numpy outputs & processed data
-*npy/
 bone_sign_out/
-face_npy/
 sign_out/
 gloss_video_mapping_output/
 
