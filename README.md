@@ -8,23 +8,25 @@ SignFy aims to facilitate seamless communication by recognizing and interpreting
 
 ## 🛠️ Technology Stack
 
-- **Language**: Python (v3.10+ / runs inside the `asl_env` virtual environment)
+- **Language**: Python (v3.14 / runs inside the `asl_env` virtual environment)
 - **Focus**: Sign Language Recognition & Translation
 - **LLM Translation Agent**: Local Ollama service running `llama3.1` (or custom models)
 - **Computer Vision & Processing**: OpenCV, MediaPipe, MoviePy
 
 ## 📁 Repository Directory Structure
 
-- [asl_env/](file:///c:/Capstone/wlasl-complete/asl_env/): Python virtual environment for the workspace.
+- [asl_env/]: Python virtual environment for the workspace (runs Python 3.14).
 - `videos_raw/` & `Microsoft_Videos_raw/`: Raw sign language videos from WLASL and Microsoft datasets.
 - `videos_best/` & `microsoft_best/`: Clarity- and stability-filtered best video clips.
 - `videos_cut/` & `microsoft_cut/`: Trimmed video clips matching precise gloss frame boundaries.
 - `videos_numpy/` & `microsoft_numpy/`: Pre-converted raw frame numpy array `.npy` files.
 - `sign_out/`: Output directory for merged, end-to-end translated sign language video clips.
 - `bone_sign_out/`: Output directory for extracted 225-dimensional MediaPipe Holistic landmark skeleton sequence `.npy` files.
-- [data_preprocessing/](file:///c:/Capstone/wlasl-complete/data_preprocessing/): Directory containing scripts for video selection, clipping, and numpy conversions.
-- [main_pipeline.py](file:///c:/Capstone/wlasl-complete/main_pipeline.py): Central entry point running the end-to-end English sentence to ASL video/skeleton pipeline.
-- [npy_player.py](file:///c:/Capstone/wlasl-complete/npy_player.py): Skeleton-based CV2 player to visualize `.npy` landmark sequences.
+- [data_preprocessing/]: Directory containing scripts for video selection, clipping, and numpy conversions.
+- [main_pipeline.py]: Central entry point running the end-to-end English sentence to ASL video/skeleton pipeline.
+- [npy_player.py]: Skeleton-based CV2 player to visualize `.npy` landmark sequences.
+- [start_asl_env.bat]: Batch script to activate `asl_env` in PowerShell.
+- [start_hamer_env.bat]: Batch script to activate `hamer_env` in PowerShell.
 
 ## 🚀 Getting Started
 
@@ -44,8 +46,36 @@ source asl_env/bin/activate
 
 Install/verify dependencies if needed:
 ```bash
-pip install -r requirements.txt
+pip install -r asl_env_requirements.txt
 ```
+
+> [!NOTE]
+> If your `asl_env` virtual environment is broken or points to a non-existent base python (e.g. miniconda), you can recreate it using Python 3.14:
+> ```powershell
+> # 1. Delete or rename the existing asl_env folder
+> Remove-Item -Recurse -Force .\asl_env
+> 
+> # 2. Re-create the virtual environment using Python 3.14 (the default python command on your system)
+> python -m venv asl_env
+> 
+> # 3. Activate the new virtual environment
+> .\asl_env\Scripts\Activate.ps1
+> 
+> # 4. Upgrade pip and install requirements
+> python -m pip install --upgrade pip
+> pip install -r asl_env_requirements.txt
+> ```
+>
+> # 2. Re-create the virtual environment using the local Python 3.11 executable path (replace with your actual path)
+> & "C:\path\to\Python311\python.exe" -m venv hamer_env
+> 
+> # 3. Activate the new virtual environment
+> .\hamer_env\Scripts\Activate.ps1
+> 
+> # 4. Upgrade pip and install requirements
+> python -m pip install --upgrade pip
+> pip install -r hamer_requirements.txt
+> ```
 
 ### 2. Set Up Local Ollama Service
 
@@ -62,7 +92,7 @@ pip install -r requirements.txt
 
 ---
 
-## 📖 Translation Pipeline Flow ([main_pipeline.py](file:///c:/Capstone/wlasl-complete/main_pipeline.py))
+## 📖 Translation Pipeline Flow (main_pipeline.py)
 
 Run the complete pipeline:
 ```bash
@@ -71,15 +101,15 @@ python main_pipeline.py
 
 The pipeline operates in the following sequential stages:
 
-1. **Stage 1: LLM Translation**: Uses [english_to_asl_gloss_llama.py](file:///c:/Capstone/wlasl-complete/english_to_asl_gloss_llama.py) to translate a user's English sentence into an ASL Gloss sequence using the local Ollama LLM.
-2. **Stage 2: Video Mapping**: Uses [asl_llm_video_mapping.py](file:///c:/Capstone/wlasl-complete/asl_llm_video_mapping.py) to map the target ASL Glosses to the corresponding WLASL or Microsoft best candidate video files.
-3. **Stage 3: Video Clipping & Merging**: Uses [video_clipper.py](file:///c:/Capstone/wlasl-complete/video_clipper.py) to clip and concatenate the mapped video files into a single merged translation video (saved under `sign_out/`).
-4. **Stage 3.5: Keypoint Extraction**: Uses [media_pipline_converter.py](file:///c:/Capstone/wlasl-complete/media_pipline_converter.py) and MediaPipe Holistic to extract pose and hand landmark keypoints frame-by-frame, outputting a 225-dimensional `.npy` keypoint sequence (saved under `bone_sign_out/`).
-5. **Stage 3.6: Raw Frame Conversion**: Invokes [video_npy_converter.py](file:///c:/Capstone/wlasl-complete/data_preprocessing/video_npy_converter.py) to compile the merged video back into a raw RGB frame numpy array.
+1. **Stage 1: LLM Translation**: Uses `english_to_asl_gloss_llama.py` to translate a user's English sentence into an ASL Gloss sequence using the local Ollama LLM.
+2. **Stage 2: Video Mapping**: Uses `asl_llm_video_mapping.py` to map the target ASL Glosses to the corresponding WLASL or Microsoft best candidate video files.
+3. **Stage 3: Video Clipping & Merging**: Uses `video_clipper.py` to clip and concatenate the mapped video files into a single merged translation video (saved under `sign_out/`).
+4. **Stage 3.5: Keypoint Extraction**: Uses `media_pipline_converter.py` and MediaPipe Holistic to extract pose and hand landmark keypoints frame-by-frame, outputting a 225-dimensional `.npy` keypoint sequence (saved under `bone_sign_out/`).
+5. **Stage 3.6: Raw Frame Conversion**: Invokes `video_npy_converter.py` to compile the merged video back into a raw RGB frame numpy array.
 
 ---
 
-## 🛠️ Preprocessing Tools ([data_preprocessing/](file:///c:/Capstone/wlasl-complete/data_preprocessing/))
+## 🛠️ Preprocessing Tools (data_preprocessing/)
 
 The repository includes several preprocessing utilities to prepare the dataset:
 
@@ -111,7 +141,7 @@ The repository includes several preprocessing utilities to prepare the dataset:
 
 ## 👁️ Visualizing Keypoint Sequences
 
-You can replay and inspect the skeleton coordinates extracted in `bone_sign_out/` using OpenCV-based visualizer [npy_player.py](file:///c:/Capstone/wlasl-complete/npy_player.py):
+You can replay and inspect the skeleton coordinates extracted in `bone_sign_out/` using OpenCV-based visualizer `npy_player.py`:
 
 ```bash
 # Play all skeleton sequence files in the directory
