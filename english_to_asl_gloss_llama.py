@@ -14,16 +14,16 @@ import urllib.request
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/chat")
 DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1")
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROMPT_PATH = os.getenv("LLM_PROMPT_FILE", os.path.join(SCRIPT_DIR, "llm_small_prompt.txt"))
 
 def load_system_prompt() -> str:
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    prompt_path = os.path.join(script_dir, "english_asl_gloss_llama_prompt.txt")
     try:
-        with open(prompt_path, "r", encoding="utf-8") as f:
+        with open(PROMPT_PATH, "r", encoding="utf-8") as f:
             return f.read().strip()
     except Exception as exc:
         raise RuntimeError(
-            f"Could not load system prompt from '{prompt_path}': {exc}"
+            f"Could not load system prompt from '{PROMPT_PATH}': {exc}"
         ) from exc
 
 
@@ -54,8 +54,19 @@ VIDEO_TOKEN_REPLACEMENTS = {
     "IX-THERE": "THERE",
 }
 
+def fallback_to_fingerspelling(word: str, database_keys: set) -> str:
+    if not word:
+        return word
+    if word not in database_keys:
+        # 如果資料庫沒有這個字，Python 自動轉成 J-O-H-N
+        word = word.replace("-", "") # avoid double hyphens
+        return "-".join(list(word)) 
+    return word
 
 def clean_gloss(response: str) -> list:
+    from asl_llm_video_mapping import get_valid_glosses
+    database_keys = get_valid_glosses()
+    
     response = response.strip()
     
     # Strip markdown code blocks if present
@@ -72,6 +83,10 @@ def clean_gloss(response: str) -> list:
     if match:
         response = match.group(0)
         
+    # Strip JavaScript-style comments (// and /* */) that LLMs sometimes hallucinate into JSON
+    response = re.sub(r"//.*", "", response)
+    response = re.sub(r"/\*.*?\*/", "", response, flags=re.DOTALL)
+        
     try:
         data = json.loads(response)
     except json.JSONDecodeError as exc:
@@ -79,52 +94,31 @@ def clean_gloss(response: str) -> list:
         
     if not isinstance(data, list):
         raise RuntimeError(f"Expected a JSON array, got: {type(data)}")
-        
-    try:
-        from asl_llm_video_mapping import is_gloss_in_db
-    except ImportError:
-        def is_gloss_in_db(g):
-            return False
 
-    IGNORE_VERBS = {"AM", "IS", "ARE", "BE", "BEEN", "BEING", "TO"}
     normalized_data = []
     for item in data:
         if not isinstance(item, dict):
             continue
-        gloss = str(item.get("gloss", "")).strip().upper()
-        fallback = str(item.get("fallback", "")).strip().upper()
-        
-        # Apply normalization replacements
-        # If the user input gloss can be found in the best_asl_videos.json, then use the user input one
-        if is_gloss_in_db(gloss):
-            fallback = gloss
-        else:
-            for old_token, new_token in VIDEO_TOKEN_REPLACEMENTS.items():
-                if gloss == old_token:
-                    gloss = new_token
-                    break
             
-            if is_gloss_in_db(gloss):
-                fallback = gloss
-            else:
-                for old_token, new_token in VIDEO_TOKEN_REPLACEMENTS.items():
-                    if fallback == old_token:
-                        fallback = new_token
-                        break
-                
-        # Split tokens just in case multiple words were grouped, filtering out helper verbs
-        gloss_parts = [g for g in gloss.split() if g and g not in IGNORE_VERBS]
-        fallback_parts = [f for f in fallback.split() if f and f not in IGNORE_VERBS]
-        
-        max_len = max(len(gloss_parts), len(fallback_parts))
-        for i in range(max_len):
-            g_part = gloss_parts[i] if i < len(gloss_parts) else (gloss_parts[-1] if gloss_parts else "")
-            f_part = fallback_parts[i] if i < len(fallback_parts) else (fallback_parts[-1] if fallback_parts else "")
-            if g_part or f_part:
-                normalized_data.append({
-                    "gloss": g_part,
-                    "fallback": f_part
-                })
+        primary = str(item.get("gloss", item.get("original_word", ""))).strip().upper()
+        # using regex to remove numbers 
+        primary = re.sub(r'\d+$', '', primary)
+        if not primary:
+            continue
+            
+        primary = fallback_to_fingerspelling(primary, database_keys)
+            
+        synonyms = item.get("synonyms", [])
+        if not isinstance(synonyms, list):
+            syn = re.sub(r'\d+$', '', str(synonyms).strip().upper())
+            synonyms = [fallback_to_fingerspelling(syn, database_keys)] if syn else []
+        else:
+            synonyms = [fallback_to_fingerspelling(re.sub(r'\d+$', '', str(s).strip().upper()), database_keys) for s in synonyms if s]
+            
+        normalized_data.append({
+            "gloss": primary,
+            "synonyms": synonyms
+        })
                 
     return normalized_data
 

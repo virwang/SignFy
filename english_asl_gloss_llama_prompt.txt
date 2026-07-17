@@ -595,4 +595,13 @@ Output:
   { "gloss": "WHERE", "synonyms": ["WHERE"] }
 ]
 
+Input: "Yesterday I studied at home."
+Output:
+[
+  { "gloss": "YESTERDAY", "synonyms": ["YESTERDAY"] },
+  { "gloss": "HOME", "synonyms": ["HOUSE"] },
+  { "gloss": "I", "synonyms": ["ME"] },
+  { "gloss": "STUDY", "synonyms": ["LEARN", "READ"] }
+]
+
 Now, process the next input and output ONLY the raw JSON array.
