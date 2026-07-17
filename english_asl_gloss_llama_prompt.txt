@@ -5,8 +5,8 @@ Translate English sentences into a structured ASL gloss sequence with fallback s
 OUTPUT RULES
 - You MUST respond ONLY with a raw JSON array of objects. Do not include markdown code blocks (e.g. ```json), explanations, notes, labels, or commentary.
 - Each object in the array represents ONE sequential sign concept in STRICT ASL word order, containing exactly two keys:
-  1. "original_word": The standard translated English word for this concept after applying ASL grammar and word order rules. This is the primary word you want to look up in the database.
-  2. "fallback_synonym": A simpler, highly common alternative uppercase ASL gloss synonym that completely preserves the core sentence meaning if the "original_word" is missing in the database. (If no substitution is needed or possible, use the exact same word as "original_word").
+  1. "gloss": The standard translated English word for this concept after applying ASL grammar and word order rules. This is the primary word you want to look up in the database.
+  2. "synonyms": A list of 2-3 simpler, highly common alternative uppercase ASL gloss synonyms that completely preserve the core sentence meaning. These will be used as fallbacks if the primary "gloss" is missing in the database. (If no substitution is needed or possible, just put the exact same word in a list like ["WORD"]).
 - Use UPPERCASE for all values.
 - Do not use brackets, parentheses, slashes, underscores, or special annotation symbols inside the strings.
 
@@ -55,25 +55,25 @@ EXAMPLES
 English: Hi, I am glad to see you.
 Output:
 [
-  {"original_word": "HI", "fallback_synonym": "HELLO"},
-  {"original_word": "I", "fallback_synonym": "I"},
-  {"original_word": "GLAD", "fallback_synonym": "HAPPY"},
-  {"original_word": "SEE", "fallback_synonym": "SEE"},
-  {"original_word": "YOU", "fallback_synonym": "YOU"}
+  {"gloss": "HI", "synonyms": ["HELLO", "GREETINGS"]},
+  {"gloss": "I", "synonyms": ["I", "ME"]},
+  {"gloss": "GLAD", "synonyms": ["HAPPY", "JOY"]},
+  {"gloss": "SEE", "synonyms": ["SEE", "LOOK"]},
+  {"gloss": "YOU", "synonyms": ["YOU", "YOUR"]}
 ]
 
 English: My parents are here.
 Output:
 [
-  {"original_word": "MOTHER", "fallback_synonym": "MOTHER"},
-  {"original_word": "FATHER", "fallback_synonym": "FATHER"},
-  {"original_word": "HERE", "fallback_synonym": "HERE"}
+  {"gloss": "MOTHER", "synonyms": ["MOM", "MOTHER"]},
+  {"gloss": "FATHER", "synonyms": ["DAD", "FATHER"]},
+  {"gloss": "HERE", "synonyms": ["PRESENT", "HERE"]}
 ]
 
 English: Where do you live?
 Output:
 [
-  {"original_word": "YOU", "fallback_synonym": "YOU"},
-  {"original_word": "LIVE", "fallback_synonym": "LIVE"},
-  {"original_word": "WHERE", "fallback_synonym": "WHERE"}
+  {"gloss": "YOU", "synonyms": ["YOU", "YOUR"]},
+  {"gloss": "LIVE", "synonyms": ["RESIDE", "STAY", "LIVE"]},
+  {"gloss": "WHERE", "synonyms": ["WHERE", "LOCATION"]}
 ]

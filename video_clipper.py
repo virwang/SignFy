@@ -419,40 +419,7 @@ def clip_and_merge_videos(
                 clip = VideoFileClip(path)
                 opened_clips.append(clip)
                 
-                # If the source is not microsoft, we need to read the WLASL dataset JSON
-                # to get the frame_start and frame_end, and clip the video.
-                if source and source.lower() != "microsoft":
-                    frame_start, frame_end, fps = get_video_frame_range(video_id)
-                    if frame_start is not None and frame_end is not None:
-                        video_fps = fps if (fps and fps > 0) else (clip.fps if clip.fps else 25.0)
-                        
-                        t_start = 0.0
-                        if frame_start > 1:
-                            t_start = (frame_start - 1) / video_fps
-                        
-                        t_end = None
-                        if frame_end > 0:
-                            t_end = frame_end / video_fps
-                            
-                        # Ensure time points do not exceed the video's actual duration
-                        if clip.duration:
-                            if t_start >= clip.duration:
-                                t_start = 0.0
-                            if t_end is not None:
-                                if t_end > clip.duration or t_end <= t_start:
-                                    t_end = clip.duration
-                                    
-                        print(f"[Clipper] Clipping '{gloss}' ({video_id}) from frame {frame_start} to {frame_end} "
-                              f"(t_start={t_start:.2f}s, t_end={f'{t_end:.2f}s' if t_end is not None else 'None'}) at {video_fps} fps")
-                        try:
-                            if hasattr(clip, "subclipped"):
-                                clipped_clip = clip.subclipped(t_start, t_end)
-                            else:
-                                clipped_clip = clip.subclip(t_start, t_end)
-                            clip = clipped_clip
-                            opened_clips.append(clip)
-                        except Exception as subclip_err:
-                            print(f"[Warning] Failed to subclip {video_id}: {subclip_err}", file=sys.stderr)
+                # Note: Videos are assumed to be pre-clipped (e.g., from videos_cut). Just merge them as-is.
                             
                 clip_with_subtitle = add_subtitle_to_clip(clip, gloss)
                 clips_to_merge.append(clip_with_subtitle)

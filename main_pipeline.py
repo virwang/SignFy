@@ -1,11 +1,10 @@
 import sys
+import os
 
 # import modules here
 from english_to_asl_gloss_llama import ask_llama as translate_to_gloss
 from asl_llm_video_mapping import find_video_records
-from video_clipper import clip_and_merge_videos
-# pyrefly: ignore [missing-import]
-from media_pipline_converter import convert_video
+from numpy_merger import merge_numpy_arrays
 
 def main():
     # 1. receive user input
@@ -24,42 +23,14 @@ def main():
 
         # Stage 2: Video Mapping (Input: ASL Gloss array -> Output: Video path/ID array)
         video_records = find_video_records(asl_gloss_list, english_input=user_input)
-        print(f"[Stage 2 success] Found corresponding videos: {video_records}")
+        print(f"[Stage 2 success] Found corresponding videos/records")
 
-        #Stage 3: Video Clipping & Merging (Input: Video records -> Output: Final video file path)
-        final_video_path = clip_and_merge_videos(video_records)
-        print(f"[Stage 3 success] Video merging complete, path: {final_video_path}")
-
-        # Stage 3.5: Keypoint Extraction (Input: Final video file path -> Output: .npy file paths)
-        if final_video_path:
-            res = convert_video(final_video_path)
-            if isinstance(res, tuple):
-                npy_path, json_path = res
-            else:
-                npy_path, json_path = res, None
-            print(f"[Stage 3.5 success] Keypoint extraction complete. NPY: {npy_path}, JSON: {json_path}")
-            
-            # Stage 3.6: Raw Frame Conversion (Input: Final video file path -> Output: .npy of raw frames)
-            print("[Stage 3.6] Converting merged video to raw frames numpy array...")
-            try:
-                import subprocess
-                import os
-                result = subprocess.run(
-                    [sys.executable, os.path.join("data_preprocessing", "video_npy_converter.py"), final_video_path],
-                    capture_output=True,
-                    text=True,
-                    check=True
-                )
-                print(result.stdout.strip())
-                print("[Stage 3.6 success] Raw frame conversion complete.")
-            except Exception as e:
-                print(f"❌ [Stage 3.6 error] Failed to convert video to raw frames: {e}", file=sys.stderr)
+        # Stage 3: Numpy Merging (Input: Video records -> Output: Final numpy file path)
+        final_npy_path = merge_numpy_arrays(video_records)
+        if final_npy_path:
+            print(f"[Stage 3 success] Numpy merging complete, path: {final_npy_path}")
         else:
-            print("[Stage 3.5 skipped] No merged video generated.")
-
-        # Stage 4: Web Rendering (Input: Final video file path -> Output: Updated web UI)
-        # update_web_ui(final_video_path)
-        # print("[Stage 4 success] website updated!")
+            print("[Stage 3 skipped] No numpy generated.")
 
     except Exception as e:
         print(f"❌ pipeline error: {e}", file=sys.stderr)

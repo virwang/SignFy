@@ -20,35 +20,27 @@ from typing import List, Dict, Tuple
 # Paths
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 MAPPLING_PATH = os.path.join(SCRIPT_DIR, "data_preprocessing", "best_asl_videos.json")
-MS_VIDEO_DIR = os.path.join(SCRIPT_DIR, "microsoft_cut")
-OTHER_VIDEO_DIR = os.path.join(SCRIPT_DIR, "videos_cut")
+NUMPY_DIR = os.path.join(SCRIPT_DIR, os.getenv("ASL_NUMPY_DIR", "videos_numpy"))
 
 # In-memory video file caches
-_ms_video_cache = None
-_other_video_cache = None
+_numpy_cache = None
 
-def get_video_caches(ms_dir=MS_VIDEO_DIR, other_dir=OTHER_VIDEO_DIR):
+def get_numpy_cache(numpy_dir=NUMPY_DIR):
     """
-    Retrieves or builds in-memory caches of video filenames (without extension).
+    Retrieves or builds in-memory cache of numpy filenames (without extension).
     """
-    global _ms_video_cache, _other_video_cache
-    if _ms_video_cache is None or _other_video_cache is None:
-        _ms_video_cache = set()
-        _other_video_cache = set()
+    global _numpy_cache
+    if _numpy_cache is None:
+        _numpy_cache = set()
         
-        if os.path.isdir(ms_dir):
-            for f in os.listdir(ms_dir):
-                if f.lower().endswith(".mp4"):
-                    _ms_video_cache.add(os.path.splitext(f)[0])
+        if os.path.isdir(numpy_dir):
+            for f in os.listdir(numpy_dir):
+                if f.lower().endswith(".npy"):
+                    _numpy_cache.add(os.path.splitext(f)[0])
                     
-        if os.path.isdir(other_dir):
-            for f in os.listdir(other_dir):
-                if f.lower().endswith(".mp4"):
-                    _other_video_cache.add(os.path.splitext(f)[0])
-                    
-        print(f"[Cache] Loaded {len(_ms_video_cache)} Microsoft videos_cut and {len(_other_video_cache)} WLASL videos_cut in memory.")
+        print(f"[Cache] Loaded {len(_numpy_cache)} numpy arrays from {numpy_dir} in memory.")
         
-    return _ms_video_cache, _other_video_cache
+    return _numpy_cache
 
 def load_video_filenames(file_path=None):
     if file_path is None:
@@ -110,7 +102,7 @@ def is_gloss_in_db(gloss: str) -> bool:
 
 def _normalize_llm_output(llm_output) -> list:
     """
-    Normalizes llm_output to a list of (primary_gloss, fallback_gloss) tuples.
+    Normalizes llm_output to a list of (primary_gloss, list_of_synonyms) tuples.
     Supports both list of strings and list of dicts.
     """
     pairs = []
@@ -119,13 +111,22 @@ def _normalize_llm_output(llm_output) -> list:
             continue
         if isinstance(item, dict):
             primary = str(item.get("gloss", "")).strip().upper()
-            fallback = str(item.get("fallback", "")).strip().upper()
+            if "synonyms" in item:
+                syns = item.get("synonyms", [])
+                if not isinstance(syns, list):
+                    syns = [str(syns).strip().upper()]
+                else:
+                    syns = [str(s).strip().upper() for s in syns]
+            elif "fallback" in item:
+                syns = [str(item.get("fallback", "")).strip().upper()]
+            else:
+                syns = []
             if primary:
-                pairs.append((primary, fallback or primary))
+                pairs.append((primary, syns))
         else:
             token = str(item).strip().upper()
             if token:
-                pairs.append((token, token))
+                pairs.append((token, []))
     return pairs
 
 def find_matching_glosses(json_data, llm_output):
@@ -133,7 +134,7 @@ def find_matching_glosses(json_data, llm_output):
     Find matching glosses and return a dictionary mapping each gloss to its first found video path & ID.
     Supports fallback synonyms if primary is missing.
     """
-    ms_cache, other_cache = get_video_caches()
+    numpy_cache = get_numpy_cache()
     
     gloss_index = {}
     if isinstance(json_data, dict):
@@ -145,13 +146,9 @@ def find_matching_glosses(json_data, llm_output):
             if not video_id:
                 continue
             video_id = str(video_id)
-            source = str(entry.get('source', '')).lower()
             
-            if source == 'microsoft':
-                video_name = os.path.splitext(video_id)[0]
-                is_found = video_name in ms_cache
-            else:
-                is_found = video_id in other_cache
+            video_name = os.path.splitext(video_id)[0]
+            is_found = video_name in numpy_cache
                 
             entry_copy = entry.copy()
             entry_copy['status'] = 'Found' if is_found else 'Missing'
@@ -176,13 +173,9 @@ def find_matching_glosses(json_data, llm_output):
                 if not video_id:
                     continue
                 video_id = str(video_id)
-                source = str(i.get('source', '')).lower()
                 
-                if source == 'microsoft':
-                    video_name = os.path.splitext(video_id)[0]
-                    is_found = video_name in ms_cache
-                else:
-                    is_found = video_id in other_cache
+                video_name = os.path.splitext(video_id)[0]
+                is_found = video_name in numpy_cache
                     
                 i['status'] = 'Found' if is_found else 'Missing'
                 if is_found:
@@ -194,23 +187,23 @@ def find_matching_glosses(json_data, llm_output):
     matching_glosses = {}
     normalized_pairs = _normalize_llm_output(llm_output)
     
-    for primary, fallback in normalized_pairs:
+    for primary, synonyms in normalized_pairs:
         # Determine which gloss to use (primary, or fallback if primary is missing/not found)
         chosen_gloss = None
         if primary in gloss_index:
             chosen_gloss = primary
-        elif fallback in gloss_index:
-            chosen_gloss = fallback
+        else:
+            for syn in synonyms:
+                if syn in gloss_index:
+                    chosen_gloss = syn
+                    break
             
         if chosen_gloss:
             first_found_item = gloss_index[chosen_gloss][0]
             source = first_found_item.get('source', '').lower()
             video_id = first_found_item.get('video_id', 'N/A')
 
-            if source == 'microsoft':
-                video_path = "./microsoft_cut/"
-            else:
-                video_path = "./videos_cut/"
+            video_path = f"./{os.path.basename(NUMPY_DIR)}/"
 
             # Maintain original primary gloss as key in output mapping for Stage 3 pipeline integration
             matching_glosses[primary] = {
@@ -278,9 +271,9 @@ def record_not_found_glosses(json_data, llm_output):
                 
     normalized_pairs = _normalize_llm_output(llm_output)
     not_found_glosses = []
-    for primary, fallback in normalized_pairs:
+    for primary, synonyms in normalized_pairs:
         # If neither primary nor fallback has any found video, it's not found
-        if primary not in found_glosses and fallback not in found_glosses:
+        if primary not in found_glosses and not any(syn in found_glosses for syn in synonyms):
             not_found_glosses.append(primary)
             
     return not_found_glosses
@@ -315,7 +308,7 @@ def find_video_records(llm_output, english_input=None, output_excel_path="asl_ma
         print(f"Error loading video filenames: {e}", file=sys.stderr)
         json_data = []
 
-    ms_cache, other_cache = get_video_caches()
+    numpy_cache = get_numpy_cache()
 
     # Pre-process the JSON data to update/verify status dynamically using caches
     gloss_index = {}
@@ -328,13 +321,9 @@ def find_video_records(llm_output, english_input=None, output_excel_path="asl_ma
             if not video_id:
                 continue
             video_id = str(video_id)
-            source = str(entry.get('source', '')).lower()
             
-            if source == 'microsoft':
-                video_name = os.path.splitext(video_id)[0]
-                is_found = video_name in ms_cache
-            else:
-                is_found = video_id in other_cache
+            video_name = os.path.splitext(video_id)[0]
+            is_found = video_name in numpy_cache
                 
             entry_copy = entry.copy()
             entry_copy['status'] = 'Found' if is_found else 'Missing'
@@ -357,13 +346,9 @@ def find_video_records(llm_output, english_input=None, output_excel_path="asl_ma
                 if not video_id:
                     continue
                 video_id = str(video_id)
-                source = str(i.get('source', '')).lower()
                 
-                if source == 'microsoft':
-                    video_name = os.path.splitext(video_id)[0]
-                    is_found = video_name in ms_cache
-                else:
-                    is_found = video_id in other_cache
+                video_name = os.path.splitext(video_id)[0]
+                is_found = video_name in numpy_cache
                     
                 i['status'] = 'Found' if is_found else 'Missing'
                 
@@ -378,9 +363,8 @@ def find_video_records(llm_output, english_input=None, output_excel_path="asl_ma
     unique_glosses_found_count = 0
     unique_glosses_missing_count = 0
 
-    for primary, fallback in normalized_pairs:
+    for primary, synonyms in normalized_pairs:
         gloss_upper = primary
-        fallback_upper = fallback
         
         # Check if primary exists and has found videos_cut
         primary_has_found = False
@@ -390,28 +374,38 @@ def find_video_records(llm_output, english_input=None, output_excel_path="asl_ma
         # Determine which gloss/items to map to
         chosen_gloss = gloss_upper
         is_fallback_used = False
+        items = None
         
         if primary_has_found:
             items = gloss_index[gloss_upper]
             chosen_gloss = gloss_upper
-        elif fallback_upper in gloss_index and any(i.get('status') == 'Found' for i in gloss_index[fallback_upper]):
-            items = gloss_index[fallback_upper]
-            chosen_gloss = fallback_upper
-            is_fallback_used = True
-        elif gloss_upper in gloss_index:
-            items = gloss_index[gloss_upper]
-            chosen_gloss = gloss_upper
-        elif fallback_upper in gloss_index:
-            items = gloss_index[fallback_upper]
-            chosen_gloss = fallback_upper
-            is_fallback_used = True
         else:
-            items = None
-            chosen_gloss = gloss_upper
+            # Check synonyms for a found video
+            found_syn = False
+            for syn in synonyms:
+                if syn in gloss_index and any(i.get('status') == 'Found' for i in gloss_index[syn]):
+                    items = gloss_index[syn]
+                    chosen_gloss = syn
+                    is_fallback_used = True
+                    found_syn = True
+                    break
+            
+            # If still not found, just get any items if available
+            if not found_syn:
+                if gloss_upper in gloss_index:
+                    items = gloss_index[gloss_upper]
+                    chosen_gloss = gloss_upper
+                else:
+                    for syn in synonyms:
+                        if syn in gloss_index:
+                            items = gloss_index[syn]
+                            chosen_gloss = syn
+                            is_fallback_used = True
+                            break
             
         gloss_found_any_video = False
         items_list = []
-        display_gloss = primary if chosen_gloss == primary else f"{primary} ({fallback})"
+        display_gloss = primary if chosen_gloss == primary else f"{primary} ({chosen_gloss})"
         
         if items is not None:
             for item in items:
@@ -427,15 +421,12 @@ def find_video_records(llm_output, english_input=None, output_excel_path="asl_ma
                     gloss_found_any_video = True
                     source_stats[source]["found"] += 1
                     
-                    if source == 'microsoft':
-                        dir_path = "./microsoft_cut/"
-                        full_path = os.path.abspath(os.path.join(MS_VIDEO_DIR, video_id))
-                    else:
-                        dir_path = "./videos_cut/"
-                        actual_filename = video_id
-                        if not actual_filename.lower().endswith(".mp4"):
-                            actual_filename += ".mp4"
-                        full_path = os.path.abspath(os.path.join(OTHER_VIDEO_DIR, actual_filename))
+                    actual_filename = video_id
+                    if not actual_filename.lower().endswith(".npy"):
+                        actual_filename = os.path.splitext(actual_filename)[0] + ".npy"
+                    
+                    dir_path = f"./{os.path.basename(NUMPY_DIR)}/"
+                    full_path = os.path.abspath(os.path.join(NUMPY_DIR, actual_filename))
                         
                     found_videos_list.append({
                         "Gloss": display_gloss,
@@ -446,10 +437,7 @@ def find_video_records(llm_output, english_input=None, output_excel_path="asl_ma
                     })
                 else:
                     source_stats[source]["missing"] += 1
-                    if source == 'microsoft':
-                        exp_dir = "./microsoft_cut/"
-                    else:
-                        exp_dir = "./videos_cut/"
+                    exp_dir = f"./{os.path.basename(NUMPY_DIR)}/"
                         
                     missing_videos_list.append({
                         "Gloss": display_gloss,
@@ -471,10 +459,7 @@ def find_video_records(llm_output, english_input=None, output_excel_path="asl_ma
                 source = first_found_item.get('source', '').lower()
                 video_id = first_found_item.get('video_id', 'N/A')
 
-                if source == 'microsoft':
-                    video_path = "./microsoft_cut/"
-                else:
-                    video_path = "./videos_cut/"
+                video_path = f"./{os.path.basename(NUMPY_DIR)}/"
 
                 matching_glosses[primary] = {
                     "video_id": video_id,
@@ -497,7 +482,7 @@ def find_video_records(llm_output, english_input=None, output_excel_path="asl_ma
         # Populate JSON structure: {'gloss':'', 'status':'found'/'missing', 'item':[{'video_id':'','source':''}]}
         json_output_data.append({
             "gloss": primary,
-            "fallback": fallback,
+            "synonyms": synonyms,
             "chosen_gloss": chosen_gloss,
             "fallback_used": is_fallback_used,
             "status": "found" if gloss_found_any_video else "missing",
