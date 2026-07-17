@@ -74,7 +74,6 @@ def merge_numpy_arrays(video_records, numpy_dir=DEFAULT_NUMPY_DIR) -> Optional[s
     
     os.makedirs(BONE_SIGN_OUT_DIR, exist_ok=True)
     
-    # "名稱與gloss 順序相同，不允許重複檔名"
     # Join glosses to form the base filename
     base_name = "_".join(glosses_used)
     # Ensure valid filename characters
@@ -84,12 +83,6 @@ def merge_numpy_arrays(video_records, numpy_dir=DEFAULT_NUMPY_DIR) -> Optional[s
         
     out_file = os.path.join(BONE_SIGN_OUT_DIR, f"{base_name}.npy")
     
-    # Handle duplicate filename
-    counter = 1
-    while os.path.exists(out_file):
-        out_file = os.path.join(BONE_SIGN_OUT_DIR, f"{base_name}_{counter}.npy")
-        counter += 1
-        
     np.save(out_file, merged_array)
     print(f"[Success] Numpy merging complete! Output file: {out_file} with shape {merged_array.shape}")
     return out_file

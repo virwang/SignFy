@@ -1,0 +1,3 @@
+@echo off
+echo Running English to ASL Gloss Llama tests...
+python -m unittest discover -s test -v

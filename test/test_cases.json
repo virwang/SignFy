@@ -1,0 +1,184 @@
+{
+  "test_cases": [
+    {
+      "id": 1,
+      "category": "Drop_Auxiliary_Verbs",
+      "english": "The apple is red.",
+      "ground_truth": "APPLE RED"
+    },
+    {
+      "id": 2,
+      "category": "Drop_Auxiliary_Verbs",
+      "english": "He is my friend.",
+      "ground_truth": "HE MY FRIEND"
+    },
+    {
+      "id": 3,
+      "category": "Drop_Auxiliary_Verbs",
+      "english": "I am a student.",
+      "ground_truth": "I STUDENT"
+    },
+    {
+      "id": 4,
+      "category": "Drop_Auxiliary_Verbs",
+      "english": "She is drinking water.",
+      "ground_truth": "SHE DRINK WATER"
+    },
+    {
+      "id": 5,
+      "category": "Drop_Auxiliary_Verbs",
+      "english": "They are happy.",
+      "ground_truth": "THEY HAPPY"
+    },
+    {
+      "id": 6,
+      "category": "Time_First_Rule",
+      "english": "I went to school yesterday.",
+      "ground_truth": "YESTERDAY I GO SCHOOL"
+    },
+    {
+      "id": 7,
+      "category": "Time_First_Rule",
+      "english": "We will eat pizza tomorrow.",
+      "ground_truth": "TOMORROW WE EAT PIZZA"
+    },
+    {
+      "id": 8,
+      "category": "Time_First_Rule",
+      "english": "I see a movie now.",
+      "ground_truth": "NOW I SEE MOVIE"
+    },
+    {
+      "id": 9,
+      "category": "Time_First_Rule",
+      "english": "She will help me tomorrow.",
+      "ground_truth": "TOMORROW SHE HELP ME"
+    },
+    {
+      "id": 10,
+      "category": "Time_First_Rule",
+      "english": "He walked home yesterday.",
+      "ground_truth": "YESTERDAY HE WALK HOME"
+    },
+    {
+      "id": 11,
+      "category": "WH_Question_Post",
+      "english": "Where is the bathroom?",
+      "ground_truth": "BATHROOM WHERE"
+    },
+    {
+      "id": 12,
+      "category": "WH_Question_Post",
+      "english": "What do you want?",
+      "ground_truth": "YOU WANT WHAT"
+    },
+    {
+      "id": 13,
+      "category": "WH_Question_Post",
+      "english": "Who is your teacher?",
+      "ground_truth": "YOUR TEACHER WHO"
+    },
+    {
+      "id": 14,
+      "category": "WH_Question_Post",
+      "english": "Why are you crying?",
+      "ground_truth": "YOU CRY WHY"
+    },
+    {
+      "id": 15,
+      "category": "WH_Question_Post",
+      "english": "When is the game?",
+      "ground_truth": "GAME WHEN"
+    },
+    {
+      "id": 16,
+      "category": "Linguistic_Synonym",
+      "english": "Hi my parents are here.",
+      "ground_truth": "HELLO MY MOTHER FATHER HERE"
+    },
+    {
+      "id": 17,
+      "category": "Linguistic_Synonym",
+      "english": "I need some medicine.",
+      "ground_truth": "I NEED MEDICINE"
+    },
+    {
+      "id": 18,
+      "category": "Linguistic_Synonym",
+      "english": "My head hurts.",
+      "ground_truth": "MY HEAD HURT"
+    },
+    {
+      "id": 19,
+      "category": "Linguistic_Synonym",
+      "english": "Where is the bus stop?",
+      "ground_truth": "BUS STOP WHERE"
+    },
+    {
+      "id": 20,
+      "category": "Linguistic_Synonym",
+      "english": "I love reading books.",
+      "ground_truth": "I LOVE BOOK"
+    },
+    {
+      "id": 21,
+      "category": "Drop_Auxiliary_Verbs",
+      "english": "The cat is black.",
+      "ground_truth": "CAT BLACK"
+    },
+    {
+      "id": 22,
+      "category": "Drop_Auxiliary_Verbs",
+      "english": "My teacher is beautiful.",
+      "ground_truth": "MY TEACHER BEAUTIFUL"
+    },
+    {
+      "id": 23,
+      "category": "Time_First_Rule",
+      "english": "They slept early last night.",
+      "ground_truth": "YESTERDAY THEY SLEEP EARLY"
+    },
+    {
+      "id": 24,
+      "category": "Time_First_Rule",
+      "english": "I will buy a computer tomorrow.",
+      "ground_truth": "TOMORROW I BUY COMPUTER"
+    },
+    {
+      "id": 25,
+      "category": "WH_Question_Post",
+      "english": "What is your name?",
+      "ground_truth": "YOUR NAME WHAT"
+    },
+    {
+      "id": 26,
+      "category": "WH_Question_Post",
+      "english": "Where do you live?",
+      "ground_truth": "YOU LIVE WHERE"
+    },
+    {
+      "id": 27,
+      "category": "Linguistic_Synonym",
+      "english": "I want some warm coffee.",
+      "ground_truth": "I WANT HOT COFFEE"
+    },
+    {
+      "id": 28,
+      "category": "Linguistic_Synonym",
+      "english": "Please write down the story.",
+      "ground_truth": "WRITE STORY"
+    },
+    {
+      "id": 29,
+      "category": "Linguistic_Synonym",
+      "english": "The boy went inside the room.",
+      "ground_truth": "BOY GO IN ROOM"
+    },
+    {
+      "id": 30,
+      "category": "Linguistic_Synonym",
+      "english": "I am feeling sick today.",
+      "ground_truth": "NOW I SICK"
+    }
+  ]
+}
