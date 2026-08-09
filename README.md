@@ -1,173 +1,96 @@
 # SignFy
 
-A Python-based project designed to bridge communication barriers between hearing and deaf individuals through sign language recognition and translation.
+**Study / Practice Project for SignifyApp — Focus: text2sign**
 
-## 🎯 Purpose
+SignFy is a research and practice implementation built to explore text-to-sign (text2sign) translation techniques and end-to-end pipelines for producing sign language video output from written English. This repository is NOT a production product; it is an experimental codebase used to prototype ideas and assemble components for the SignifyApp project.
 
-SignFy aims to facilitate seamless communication by recognizing and interpreting sign language, making it easier for people to connect and understand each other regardless of their hearing abilities.
+## Goals
 
-## 🛠️ Technology Stack
+- Investigate and prototype text2sign: convert an English sentence into an ASL gloss sequence and map that sequence to recorded sign video clips or synthesized skeleton sequences.
+- Provide tools for dataset preprocessing, mapping glosses to video snippets, extracting keypoints, and assembling merged sign-language outputs for inspection and evaluation.
+- Serve as a practice playground for model and pipeline experiments used in SignifyApp.
 
-- **Language**: Python (v3.14 / runs inside the `asl_env` virtual environment)
-- **Focus**: Sign Language Recognition & Translation
-- **LLM Translation Agent**: Local Ollama service running `llama3.1` (or custom models)
-- **Computer Vision & Processing**: OpenCV, MediaPipe, MoviePy
+## Key Features (text2sign focus)
 
-## 📁 Repository Directory Structure
+1. LLM-based English → ASL Gloss translation (text2gloss)
+   - Scripts use a local LLM (Ollama) to convert input English sentences into ASL gloss sequences.
+   - File: `english_to_asl_gloss_llama.py`
 
-- [asl_env/]: Python virtual environment for the workspace (runs Python 3.14).
-- `videos_raw/` & `Microsoft_Videos_raw/`: Raw sign language videos from WLASL and Microsoft datasets.
-- `videos_best/` & `microsoft_best/`: Clarity- and stability-filtered best video clips.
-- `videos_cut/` & `microsoft_cut/`: Trimmed video clips matching precise gloss frame boundaries.
-- `videos_numpy/` & `microsoft_numpy/`: Pre-converted raw frame numpy array `.npy` files.
-- `sign_out/`: Output directory for merged, end-to-end translated sign language video clips.
-- `bone_sign_out/`: Output directory for extracted 225-dimensional MediaPipe Holistic landmark skeleton sequence `.npy` files.
-- [data_preprocessing/]: Directory containing scripts for video selection, clipping, and numpy conversions.
-- [main_pipeline.py]: Central entry point running the end-to-end English sentence to ASL video/skeleton pipeline.
-- [npy_player.py]: Skeleton-based CV2 player to visualize `.npy` landmark sequences.
-- [start_asl_env.bat]: Batch script to activate `asl_env` in PowerShell.
-- [start_hamer_env.bat]: Batch script to activate `hamer_env` in PowerShell.
+2. Gloss → Video Mapping
+   - Maps ASL gloss tokens to best-matching candidate clips from WLASL / Microsoft datasets and selects clips for each gloss.
+   - File: `asl_llm_video_mapping.py`
 
-## 🚀 Getting Started
+3. Video Clipping & Merging (text2sign output generation)
+   - Clips selected video segments and concatenates them into a single translation video that visualizes the ASL translation of the input text.
+   - File: `video_clipper.py` (output saved under `sign_out/`)
 
-### 1. Set Up the Python Environment
+4. Keypoint Extraction & Skeleton Outputs
+   - Extracts MediaPipe Holistic landmarks (pose + hands) and saves 225-dim landmark sequences as `.npy` files.
+   - Visualize skeleton sequences with `npy_player.py`.
 
-Activate the local python virtual environment:
+5. Utilities for dataset preprocessing and frame-level conversions
+   - Tools located in `data_preprocessing/` to select best videos, clip frames, and convert to numpy frame arrays.
 
-#### Windows PowerShell:
+## Quick Start (text2sign)
+
+1. Activate the Python environment (`asl_env`) and install dependencies:
+
+Windows PowerShell:
+
 ```powershell
 .\asl_env\Scripts\activate
 ```
 
-#### Linux/macOS:
+Linux/macOS:
+
 ```bash
 source asl_env/bin/activate
 ```
 
-Install/verify dependencies if needed:
 ```bash
 pip install -r asl_env_requirements.txt
 ```
 
-> [!NOTE]
-> If your `asl_env` virtual environment is broken or points to a non-existent base python (e.g. miniconda), you can recreate it using Python 3.14:
-> ```powershell
-> # 1. Delete or rename the existing asl_env folder
-> Remove-Item -Recurse -Force .\asl_env
-> 
-> # 2. Re-create the virtual environment using Python 3.14 (the default python command on your system)
-> python -m venv asl_env
-> 
-> # 3. Activate the new virtual environment
-> .\asl_env\Scripts\Activate.ps1
-> 
-> # 4. Upgrade pip and install requirements
-> python -m pip install --upgrade pip
-> pip install -r asl_env_requirements.txt
-> ```
->
-> # 2. Re-create the virtual environment using the local Python 3.11 executable path (replace with your actual path)
-> & "C:\path\to\Python311\python.exe" -m venv hamer_env
-> 
-> # 3. Activate the new virtual environment
-> .\hamer_env\Scripts\Activate.ps1
-> 
-> # 4. Upgrade pip and install requirements
-> python -m pip install --upgrade pip
-> pip install -r hamer_requirements.txt
-> ```
+2. Start the local Ollama service (used for LLM-based translation):
 
-### 2. Set Up Local Ollama Service
+```bash
+ollama serve
+ollama pull llama3.1
+```
 
-1. Ensure Ollama is installed ([https://ollama.com/](https://ollama.com/))
-2. Start the Ollama service:
-   ```bash
-   ollama serve
-   ```
-3. Pull the default `llama3.1` translation model:
-   ```bash
-   ollama pull llama3.1
-   ```
-4. The Ollama local API will be automatically queried by the translation script at `http://localhost:11434`.
+3. Run the end-to-end text2sign pipeline (example):
 
----
-
-## 📖 Translation Pipeline Flow (main_pipeline.py)
-
-Run the complete pipeline:
 ```bash
 python main_pipeline.py
 ```
 
-The pipeline operates in the following sequential stages:
+- main_pipeline.py orchestrates: English → ASL gloss (LLM) → gloss-to-video mapping → clip & merge → optional keypoint extraction and numpy conversion.
 
-1. **Stage 1: LLM Translation**: Uses `english_to_asl_gloss_llama.py` to translate a user's English sentence into an ASL Gloss sequence using the local Ollama LLM.
-2. **Stage 2: Video Mapping**: Uses `asl_llm_video_mapping.py` to map the target ASL Glosses to the corresponding WLASL or Microsoft best candidate video files.
-3. **Stage 3: Video Clipping & Merging**: Uses `video_clipper.py` to clip and concatenate the mapped video files into a single merged translation video (saved under `sign_out/`).
-4. **Stage 3.5: Keypoint Extraction**: Uses `media_pipline_converter.py` and MediaPipe Holistic to extract pose and hand landmark keypoints frame-by-frame, outputting a 225-dimensional `.npy` keypoint sequence (saved under `bone_sign_out/`).
-5. **Stage 3.6: Raw Frame Conversion**: Invokes `video_npy_converter.py` to compile the merged video back into a raw RGB frame numpy array.
+## Directory Overview
 
----
+- `videos_raw/`, `Microsoft_Videos_raw/` — original dataset clips
+- `videos_best/`, `microsoft_best/` — selected best candidate clips
+- `videos_cut/`, `microsoft_cut/` — clipped videos per-gloss
+- `videos_numpy/`, `microsoft_numpy/` — raw RGB frame arrays
+- `sign_out/` — merged final sign video results (text2sign outputs)
+- `bone_sign_out/` — extracted skeleton `.npy` sequences
+- `data_preprocessing/` — helpers for selection, clipping, conversion
+- `main_pipeline.py` — orchestrates the full text2sign pipeline
+- `npy_player.py` — visualizer for skeleton sequences
 
-## 🛠️ Preprocessing Tools (data_preprocessing/)
+## Intended Use & Limitations
 
-The repository includes several preprocessing utilities to prepare the dataset:
+- This repository is a study/practice project and intended for experimentation, research, and education. It is not production-ready and should not be used as a deployed accessibility product without further engineering, testing, and community consultation.
+- Accuracy depends heavily on dataset coverage, gloss mapping heuristics, and the underlying LLM; results are demonstrative.
 
-1. **Evaluate and Select Best Videos**:
-   ```bash
-   python data_preprocessing/select_best_videos.py
-   ```
-   *Uses Laplacian clarity filtering and MediaPipe tracking stability to pick the best candidate video for each gloss. Results are saved in `data_preprocessing/best_asl_videos.json`.*
+## Contributing
 
-2. **Copy Best Candidate Videos**:
-   ```bash
-   python data_preprocessing/move_best_videos.py
-   ```
-   *Copies selected best videos from raw directories to `videos_best/` and `microsoft_best/`.*
+Contributions, experiment notes, and improvements are welcome. If you make changes that materially improve the text2sign pipeline, please open a pull request describing the change and reproducible steps.
 
-3. **Frame Clipping**:
-   ```bash
-   python data_preprocessing/videos_frame_clipper.py
-   ```
-   *Clips candidate videos to their starting and ending frames, saving cropped outputs to `videos_cut/` and `microsoft_cut/`.*
-
-4. **Numpy Conversion**:
-   ```bash
-   python data_preprocessing/video_npy_converter.py
-   ```
-   *Batch converts cropped videos to raw numpy frame arrays saved in `videos_numpy/` and `microsoft_numpy/`.*
-
----
-
-## 👁️ Visualizing Keypoint Sequences
-
-You can replay and inspect the skeleton coordinates extracted in `bone_sign_out/` using OpenCV-based visualizer `npy_player.py`:
-
-```bash
-# Play all skeleton sequence files in the directory
-python npy_player.py bone_sign_out/
-
-# Play a specific skeleton file
-python npy_player.py bone_sign_out/some_sequence.npy
-```
-
-### Keyboard Controls:
-- **Space** - Pause / Resume
-- **Q / Esc** - Quit playback
-- **N** - Load next file
-- **P** - Load previous file
-- **Left / Right / A / D** - Step single frame back/forward (while paused)
-- **+ / -** - Speed up / Slow down frame rate
-- **R** - Replay current file
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit pull requests or open issues to help improve SignFy.
-
-## 📄 License
+## License
 
 [Add your license information here]
 
-## 👥 Support
+## Support
 
-If you have questions or need assistance, please open an issue on this repository.
+For questions or issues, please open an issue on this repository.
